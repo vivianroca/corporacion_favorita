@@ -960,3 +960,31 @@ Cada etapa se valida, se audita y recibe un tag anotado lab1-*. Se prepara un PR
 conjunto feature/modelos-pronostico hacia main. No se hace merge, no se crea
 entrega-lab1 y no se selecciona Champion. Se conserva la exclusión de secretos,
 CSV, simulaciones, snapshots, modelos, predicciones y almacenamiento Docker.
+
+## D055 — Solo doce pipelines y cuatro CBM en DVC
+
+El usuario autoriza exclusivamente los doce pipelines actuales de los cuatro folds
+(RF/HGB temporales v2 y CatBoost) y los cuatro nativos CatBoost. Excluye simulación,
+snapshots y modelos históricos; tampoco se añaden métricas, parámetros, predicciones,
+gráficas o paquetes de Registry al conjunto DVC. No se entrena ni deserializa un modelo.
+
+Se crea feature/dvc-modelos-actuales desde main actualizado, que ya contiene el PR #3
+fusionado por el usuario. Los pesos se copian sin modificar sus fuentes en reports,
+agrupados en models/current. Un único puntero models/current.dvc representa exactamente
+16 binarios y 35.544.890 bytes. Se conserva el remoto storage dedicado del laboratorio,
+cache.type copy y --no-relink; no se regenera la simulación ni se toca el entorno externo.
+
+El push agregó 17 objetos: 16 pesos y el índice 6758afd54f231ee0e194603f381b7567.dir.
+El estado cloud confirma sincronización. Se recuperaron en un clon sin pesos/caché,
+mediante pull explícito de ese único puntero. Coinciden los 16 SHA-256 y tamaños.
+No se borraron cachés, los modelos locales/cache principal no cambiaron al recuperar,
+y los 16 archivos fuente de reports y cinco CSV conservan contenido y mtime.
+
+La exclusión Git mantiene transitables los padres para descubrir el nuevo puntero,
+pero no expone binarios. La auditoría permite solo models/current.dvc, con índice de
+directorio, destino current y nfiles=16; rechaza otros punteros y se añade defensa
+explícita para .cbm. Cuarenta pruebas de auditoría/exclusiones pasan sin fit, con
+Ruff/formato correctos. El informe de recuperación local queda ignorado por Git/DVC.
+
+No cambian versiones de MLflow, aliases, pesos o hiperparámetros. El remoto local
+no habilita acceso docente externo; permanece pendiente un remoto compartido.

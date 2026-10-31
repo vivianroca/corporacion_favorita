@@ -127,3 +127,48 @@ def test_gitignore_keeps_dvc_parents_traversable_without_exposing_data():
     assert ignored("data/original/test.csv")
     assert ignored("data/original/sample_submission.csv")
     assert ignored("data/simulation/manifest.json")
+    assert not ignored("models/")
+    assert not ignored("models/current.dvc")
+    assert ignored("models/current/catboost/fold_1/model.cbm")
+    assert ignored("models/current/random_forest/fold_1/model.joblib")
+
+
+def test_current_model_directory_pointer_is_allowed():
+    import yaml
+
+    document = {
+        "outs": [
+            {
+                "md5": "a" * 32 + ".dir",
+                "size": 35544890,
+                "nfiles": 16,
+                "hash": "md5",
+                "path": "current",
+            }
+        ]
+    }
+    AUDIT.validate_blob("models/current.dvc", yaml.safe_dump(document).encode())
+
+
+@pytest.mark.parametrize(
+    "field,value", [("nfiles", 15), ("nfiles", True), ("path", "../reports"), ("md5", "a" * 32)]
+)
+def test_model_pointer_cannot_expand_its_authorized_scope(field, value):
+    import yaml
+
+    out = {
+        "md5": "a" * 32 + ".dir",
+        "size": 35544890,
+        "nfiles": 16,
+        "hash": "md5",
+        "path": "current",
+    }
+    out[field] = value
+    with pytest.raises(AUDIT.AuditError):
+        AUDIT.validate_blob("models/current.dvc", yaml.safe_dump({"outs": [out]}).encode())
+
+
+@pytest.mark.parametrize("path", ["model.cbm", "models/other.dvc", "models/current/private.json"])
+def test_model_artifacts_and_other_pointers_remain_blocked(path):
+    with pytest.raises(AUDIT.AuditError):
+        AUDIT.validate_blob(path, b"not metadata")

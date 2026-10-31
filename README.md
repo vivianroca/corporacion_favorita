@@ -508,3 +508,23 @@ se recuperaron y reprodujeron sus predicciones originales. No hay Champion ni al
 El código se publica por etapas con tags anotados; el PR conjunto no hace merge
 automático. [Mapa de ramas y tags](docs/publicacion_modelos.md). Los datos y pesos
 entrenados permanecen fuera de Git.
+
+## Pesos actuales versionados con DVC
+
+`models/current.dvc` referencia exclusivamente **12 pipelines actuales y cuatro
+archivos nativos CatBoost**, de los cuatro folds temporales v2. Los 16 binarios
+ocupan **35.544.890 bytes** y se almacenan en `storage`, el remoto local existente.
+Git guarda el puntero; los `.joblib` y `.cbm` permanecen ignorados.
+
+```bash
+.venv/bin/dvc pull models/current.dvc -r storage
+```
+
+El push agregó 17 objetos incluyendo el índice de directorio. Se verificó una
+recuperación desde caché vacía: 16 archivos idénticos por SHA-256, sin borrar ni
+alterar fuentes o cachés principales y sin entrenar. No se versionaron simulación,
+snapshots, modelos históricos, predicciones ni otros artefactos.
+
+[Alcance exacto, estructura y verificación](docs/modelos_dvc.md). El remoto local
+no es accesible desde GitHub ni por docentes en otros equipos; el remoto externo
+sigue pendiente.

@@ -10,7 +10,8 @@ import yaml
 
 MAX_BYTES = 1024 * 1024
 DVC_ORIGINALS = {"train", "stores", "holidays_events", "oil", "transactions"}
-DVC_POINTERS = {f"data/original/{name}.csv.dvc" for name in DVC_ORIGINALS}
+DVC_MODEL_POINTER = "models/current.dvc"
+DVC_POINTERS = {f"data/original/{name}.csv.dvc" for name in DVC_ORIGINALS} | {DVC_MODEL_POINTER}
 FORBIDDEN_DIRS = {
     "data",
     "models",
@@ -37,6 +38,7 @@ FORBIDDEN_SUFFIXES = {
     ".pkl",
     ".pickle",
     ".joblib",
+    ".cbm",
     ".onnx",
     ".h5",
     ".pt",
@@ -110,16 +112,26 @@ def validate_blob(path, content, *, mode="100644", secrets=(), path_only=False):
             if not isinstance(document["outs"], list) or len(document["outs"]) != 1:
                 raise ValueError("outputs")
             out = document["outs"][0]
+            is_model_directory = path == DVC_MODEL_POINTER
+            allowed_fields = {"md5", "size", "path", "hash"}
+            if is_model_directory:
+                allowed_fields.add("nfiles")
             if not isinstance(out, dict) or not (
-                {"md5", "size", "path"} <= set(out) <= {"md5", "size", "path", "hash"}
+                {"md5", "size", "path"} <= set(out) <= allowed_fields
             ):
                 raise ValueError("campos")
             if not (
-                re.fullmatch(r"[a-f0-9]{32}", out["md5"])
+                re.fullmatch(
+                    r"[a-f0-9]{32}\.dir" if is_model_directory else r"[a-f0-9]{32}", out["md5"]
+                )
                 and type(out["size"]) is int
                 and out["size"] >= 0
                 and out.get("hash", "md5") == "md5"
                 and out["path"] == parts.name.removesuffix(".dvc")
+                and (
+                    not is_model_directory
+                    or (type(out.get("nfiles")) is int and out["nfiles"] == 16)
+                )
             ):
                 raise ValueError("contenido")
         except (ValueError, TypeError, KeyError, yaml.YAMLError, UnicodeError) as error:

@@ -27,7 +27,10 @@ dist/
 !/data/original/holidays_events.csv.dvc
 !/data/original/oil.csv.dvc
 !/data/original/transactions.csv.dvc
-/models/
+# Solo el puntero de los 16 pesos autorizados; el directorio sigue fuera de Git.
+/models/?*
+!/models/
+!/models/current.dvc
 /forecasts/
 /orders/
 /reports/
@@ -52,6 +55,7 @@ dist/
 *.pkl
 *.pickle
 *.joblib
+*.cbm
 *.onnx
 *.h5
 *.pt
