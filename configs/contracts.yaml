@@ -1,0 +1,40 @@
+schema_version: 1
+sources:
+  train:
+    primary_key: [date, store_nbr, family]
+    unique_keys: [[id]]
+    columns:
+      id: {type: integer, minimum: 0}
+      date: {type: date}
+      store_nbr: {type: integer, minimum: 1}
+      family: {type: text}
+      sales: {type: decimal, minimum: 0}
+      onpromotion: {type: integer, minimum: 0}
+  stores:
+    primary_key: [store_nbr]
+    columns:
+      store_nbr: {type: integer, minimum: 1}
+      city: {type: text}
+      state: {type: text}
+      type: {type: text, enum: [A, B, C, D, E]}
+      cluster: {type: integer, minimum: 1}
+  holidays_events:
+    primary_key: [date, type, locale, locale_name, description]
+    columns:
+      date: {type: date}
+      type: {type: text, enum: [Holiday, Transfer, Additional, Bridge, Work Day, Event]}
+      locale: {type: text, enum: [National, Regional, Local]}
+      locale_name: {type: text}
+      description: {type: text}
+      transferred: {type: boolean}
+  oil:
+    primary_key: [date]
+    columns:
+      date: {type: date}
+      dcoilwtico: {type: decimal, minimum: 0, nullable: true}
+  transactions:
+    primary_key: [date, store_nbr]
+    columns:
+      date: {type: date}
+      store_nbr: {type: integer, minimum: 1}
+      transactions: {type: integer, minimum: 0}

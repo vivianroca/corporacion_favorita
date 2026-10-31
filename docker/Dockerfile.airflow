@@ -1,0 +1,10 @@
+FROM apache/airflow:3.3.2-python3.12
+USER root
+RUN mkdir -p /opt/lab1/operational /opt/airflow/auth && chown -R airflow:root /opt/lab1 /opt/airflow/auth
+USER airflow
+COPY --chown=airflow:root src/reposicion /opt/lab1/src/reposicion
+COPY --chown=airflow:root configs /opt/lab1/configs
+COPY --chown=airflow:root dags /opt/airflow/dags
+COPY --chown=airflow:root docker/init_airflow.py /opt/lab1/init_airflow.py
+ENV PYTHONPATH=/opt/lab1/src
+WORKDIR /opt/lab1

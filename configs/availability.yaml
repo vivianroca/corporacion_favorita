@@ -1,0 +1,53 @@
+schema_version: 1
+timezone: America/Guayaquil
+historical_at: '2017-01-01T00:00:00-05:00'
+stores_reference_date: '2013-01-01'
+seed: 26
+sources:
+  train:
+    cadence: daily
+    lag_days: 1
+    hour: 6
+    late_percent: 5
+    late_days: 3
+    correction_percent: 5
+    correction_days: 7
+    correction_field: sales
+    provisional_factor: '0.9'
+  transactions:
+    cadence: weekly
+    weekday: 0  # lunes; un archivo por fecha de referencia, publicados en lote
+    lag_days: 1
+    hour: 9
+    late_percent: 5
+    late_days: 3
+    correction_percent: 3
+    correction_days: 7
+    correction_field: transactions
+    provisional_factor: '0.9'
+  oil:
+    cadence: business_daily
+    lag_days: 1  # días hábiles lunes-viernes, sin calendario bursátil externo
+    hour: 18
+    late_percent: 5
+    late_days: 2
+    correction_percent: 3
+    correction_days: 7
+    correction_field: dcoilwtico
+    provisional_factor: '0.9'
+  holidays_events:
+    cadence: weekly
+    weekday: 0
+    lead_days: 30
+    unplanned_types: [Event]
+    lag_days: 1
+    hour: 8
+    late_percent: 0
+    late_days: 0
+    correction_percent: 0
+  stores:
+    cadence: snapshot
+    hour: 0
+    late_percent: 0
+    late_days: 0
+    correction_percent: 0
