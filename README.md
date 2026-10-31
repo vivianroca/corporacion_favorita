@@ -3,8 +3,8 @@
 Producto propuesto para generar pronósticos y pedidos por tienda y familia con
 trazabilidad mediante Git, DVC y Airflow. Están implementadas la base y la
 **etapa 3: ingesta, validación y snapshots temporales con Airflow**. La infraestructura
-exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadieron un baseline semanal y
-Random Forest como primer candidato, con evaluación temporal independiente de Airflow.
+exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadieron pronósticos por tienda/familia con evaluación temporal, seguimiento
+en MLflow y candidatos Random Forest e HistGradientBoosting.
 
 ## Estado actual
 
@@ -15,7 +15,7 @@ Random Forest como primer candidato, con evaluación temporal independiente de A
 - Ingesta y versionado inicial de originales con DVC integrados en `main`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 134 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
+- pytest 9.2.0: 137 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -320,7 +320,7 @@ importancias, trazabilidad, lock y gráficas de reales frente a pronósticos y d
 de errores. Los doce artefactos se descargaron y verificaron por SHA-256.
 
 Las dependencias nuevas, `scikit-learn==1.9.1` y `matplotlib==3.11.2`, están instaladas
-en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 134 pruebas.
+en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 137 pruebas.
 [Detalles del diseño y disponibilidad temporal](docs/random_forest.md).
 No se asignó `champion`; la comparación de una semana no basta para promover un modelo.
 
@@ -350,3 +350,35 @@ El contexto reutilizable está en `src/reposicion/system_metrics.py`. El baselin
 que no ajusta un modelo, conserva su implementación. Esta preparación **no reentrenó**
 los modelos existentes ni agregó métricas retrospectivas a sus runs: las nuevas
 series temporales se comprobarán en el próximo entrenamiento autorizado.
+
+## HistGradientBoosting: segundo candidato y Model Registry
+
+```bash
+.venv/bin/python -m reposicion.hist_gradient_boosting \
+  --baseline reports/baseline/2017-01-08 \
+  --forest reports/random_forest/2017-01-08 \
+  --output reports/hist_gradient_boosting/2017-01-08
+```
+
+Reutiliza las variables, disponibilidad histórica y ocho orígenes de entrenamiento
+de Random Forest. Se comprueban la trazabilidad y las mismas 12.474 claves/reales
+del 8–14 de enero de 2017, con los cortes originales y sin ajustar hiperparámetros
+contra ese horizonte. El early stopping está desactivado.
+
+| Modelo | MAE | WAPE |
+|---|---:|---:|
+| Baseline semanal | 230,355045 | 48,544283 % |
+| Random Forest | **191,136342** | **40,279459 %** |
+| HistGradientBoosting | 207,908913 | 43,814057 % |
+
+[Run de HistGradientBoosting](http://localhost:5011/#/experiments/2/runs/39562417052c45bb8dece31675763d19):
+`FINISHED`, con parámetros, métricas, predicciones, gráficas y System Metrics reales.
+CPU y RAM tienen 16 muestras cada una; el ajuste duró 5,730 s y la ejecución 17,364 s.
+
+Model Registry contiene `corporacion_favorita_hist_gradient_boosting`, versión **1**,
+`READY`, con el pipeline completo, firma e input example. URI:
+`models:/corporacion_favorita_hist_gradient_boosting/1`. No tiene aliases.
+
+El candidato mejora al baseline; Random Forest conserva el menor error en esta
+semana. No se asigna `champion`. Los modelos anteriores no se reentrenaron y sus runs
+permanecen intactos. [Diseño, comandos y verificación](docs/hist_gradient_boosting.md).

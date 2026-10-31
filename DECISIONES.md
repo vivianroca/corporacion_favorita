@@ -721,3 +721,43 @@ Resultado de esta preparación: 134 pruebas aprobadas; Ruff, formato y pip check
 correctos. El colector oficial de CPU/RAM funciona en .venv. Las consultas de ambos
 runs existentes coinciden íntegramente con su estado anterior (parámetros, métricas,
 tags y metadatos). No se ejecutó entrenamiento real ni se modificaron esos runs.
+
+## D049 — HistGradientBoosting autorizado, System Metrics reales y Registry
+
+Se autoriza un nuevo candidato HistGradientBoostingRegressor y su registro en Model
+Registry, sin modificar Airflow ni DVC ni asignar champion. Se reutilizan las funciones
+de variables, lecturas por disponibilidad y entrenamiento de Random Forest. Se exige
+la misma trazabilidad de entrenamiento y las mismas claves y reales de evaluación.
+No se reentrenan ni se modifican los runs anteriores.
+
+Se fijaron antes del resultado: loss=poisson (ventas no negativas, sin redondeo),
+learning_rate=0.08, max_iter=150, max_leaf_nodes=31, min_samples_leaf=20,
+l2_regularization=1.0, max_bins=255, random_state=42 y early_stopping=False.
+No se hace selección aleatoria interna ni búsqueda sobre el horizonte de evaluación.
+La codificación e imputación coinciden exactamente con Random Forest. El pipeline
+acepta DataFrame para poder usar el formato sklearn/pyfunc de MLflow y conservar
+el preprocesamiento dentro del modelo registrado. Se limita fit/predict a dos hilos.
+
+Se agregó pandas 3.1.0 para el formato MLflow, con lock y hashes bajo Python 3.12.
+La primera prueba detectó que MLflow elegía skops por defecto; se fijó cloudpickle
+explícitamente, ya instalado, y se comprobó la recuperación del modelo propio.
+No fue necesario instalar skops ni cambiar infraestructura.
+
+98.010 filas y ocho orígenes anteriores, emisión 2017-01-08T12:00Z y evaluación
+2017-02-10T12:00Z. Las 12.474 observaciones del 8–14 de enero coinciden con los dos
+modelos anteriores. MAE=207.9089128775264, WAPE=0.4381405728932026 como fracción.
+Mejora al baseline, pero Random Forest sigue con menor error; no se reajustan los
+parámetros tras observarlo ni se concluye desempeño general con una sola semana.
+
+Run 39562417052c45bb8dece31675763d19, FINISHED. Se verificaron 16 muestras de CPU/RAM
+del host, ajuste de 5.730457833000401 segundos y ejecución de 17.364074500001152.
+Model Registry: corporacion_favorita_hist_gradient_boosting, versión 1, READY,
+sin aliases. Se guardan artefactos y gráficas, y un MLflow Model con firma y ejemplo
+de entrada, además de comparación con baseline y Random Forest.
+La suite aprueba 137 pruebas; Ruff/formato y pip check correctos. Las advertencias
+no bloqueantes de dependencias se documentan en docs/hist_gradient_boosting.md.
+
+Verificación posterior: la versión 1 recuperada desde Registry reproduce las
+12.474 predicciones por sklearn y pyfunc (tolerancia 1e-12). Los doce artefactos
+del run conservan SHA-256 idénticos al descargarlos. Los dos runs anteriores
+conservan íntegramente estado, parámetros, métricas, tags y metadatos.
