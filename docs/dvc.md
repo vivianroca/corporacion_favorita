@@ -164,3 +164,11 @@ No se creó un bucket, no se configuraron credenciales ni se contrató almacenam
 Referencias oficiales: [alta y no-relink](https://doc.dvc.org/command-reference/add),
 [remotos](https://doc.dvc.org/command-reference/remote/add) y
 [S3](https://doc.dvc.org/user-guide/data-management/remote-storage/amazon-s3).
+
+## Incorporación posterior: pesos actuales
+
+Se añade `models/current.dvc` para los doce pipelines temporales v2 y cuatro CBM,
+16 binarios/35.544.890 bytes. El remoto storage conserva 17 objetos nuevos incluyendo
+el índice de directorio. Se verificó pull aislado sin borrar cachés ni entrenar.
+[Detalle y exclusiones](modelos_dvc.md). Simulación, snapshots, históricos y otros
+artefactos continúan fuera de DVC según el alcance autorizado.
