@@ -916,3 +916,47 @@ tolerancia 1e-12. Las medianas y columnas codificadas coinciden con RF v2. Se de
 y código baseline conservan su estado. No se modifican Airflow, DVC ni originales.
 154 pruebas aprobadas; Ruff/formato y pip check correctos. Los resultados son de
 comparación de desarrollo sobre enero ya inspeccionado, no evaluación final inédita.
+
+## D053 — Registro de modelos ya ajustados, sin nuevos entrenamientos
+
+El usuario autoriza publicar los modelos existentes en Models de MLflow y recalca
+que no se vuelvan a entrenar. Se publican los doce pipelines temporales v2 de los
+cuatro folds: RF versiones 1–4, HGB versiones 2–5 y CatBoost versiones 1–4. Se conserva
+HGB versión 1 y su Logged Model del experimento anterior. La autorización de registro
+actual amplía la decisión previa de mantener los ajustes de validación solo como
+artefactos. No implica selección de Champion ni promoción de ninguna versión.
+
+register_models.py carga los estados joblib existentes y reconstruye únicamente las
+entradas de inferencia conocidas al corte para verificar sus predicciones. No contiene
+llamadas a fit ni crea runs de entrenamiento. Se empaqueta el pipeline completo con
+firma, ejemplo, código y dependencias, formato sklearn/pyfunc mediante cloudpickle.
+Se crean Logged Models vinculados a los runs de origen, se publican sus artefactos
+y se crean versiones de Registered Models apuntando a esos modelos, todos READY.
+
+Para mostrar MAE/WAPE en Logged Models se reutiliza el mismo evento histórico
+(valor/timestamp/step) con model_id. El backend MLflow 3.17.2 deduplica los eventos
+del run, hecho verificado comparando sus historiales antes/después. Se agregan las
+asociaciones de modelos a outputs de sus runs sin modificar info, parámetros, tags,
+valores o historiales de métricas. Los resultados globales siguen en runs agregados;
+las versiones muestran las métricas de su propio fold, sin confundir ambos niveles.
+
+Se verifica por pyfunc la recuperación de las doce versiones y sus 12.474 predicciones
+por modelo, tolerancia 1e-12, además de estados READY y métricas asociadas. Se conservan
+38 runs, sus metadatos/datos e historiales, y la versión 1 anterior de HGB. El script se
+repitió sin crear duplicados. El mapa local registrations.json está ignorado por Git.
+No hubo nuevos entrenamientos, hiperparámetros, dependencias, aliases o stages de
+promoción. No se modifican Airflow ni DVC. Ruff y formato pasan; la comprobación de
+esta tarea se realiza exclusivamente con carga/inferencia y lectura de metadatos.
+
+## D054 — Separación en commits, ramas y tags Git autorizados
+
+El usuario autoriza publicar el código pendiente por ramas y aclara que las etiquetas
+son tags de Git, sin comentarios añadidos a archivos de modelos. Se respalda primero
+el trabajo y se separa en siete etapas acumulativas, documentadas en
+docs/publicacion_modelos.md. El lock compartido se versiona desde Random Forest;
+no se generan locks con otro intérprete ni se modifican datos o pesos entrenados.
+
+Cada etapa se valida, se audita y recibe un tag anotado lab1-*. Se prepara un PR
+conjunto feature/modelos-pronostico hacia main. No se hace merge, no se crea
+entrega-lab1 y no se selecciona Champion. Se conserva la exclusión de secretos,
+CSV, simulaciones, snapshots, modelos, predicciones y almacenamiento Docker.

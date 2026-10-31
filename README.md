@@ -484,3 +484,27 @@ importancias y trazabilidad. Se verificó la recuperación de todas las predicci
 [Diseño, comparación con RF/HGB v2 y enlaces por fold](docs/catboost.md).
 Se conservan los 33 runs anteriores, el baseline, Registry, Airflow y DVC. No se
 optimizaron hiperparámetros ni se asignó Champion. La suite aprueba 154 pruebas.
+
+## Modelos disponibles en MLflow Models
+
+Se publicaron **sin reentrenar** los pipelines temporales v2 de los cuatro folds en
+[Model Registry](http://localhost:5011/#/models) y Logged Models:
+
+| Modelo registrado | Versiones v2 |
+|---|---|
+| `corporacion_favorita_random_forest` | 1–4 |
+| `corporacion_favorita_hist_gradient_boosting` | 2–5 |
+| `corporacion_favorita_catboost` | 1–4 |
+
+Las versiones corresponden a los cortes 8, 15, 22 y 29 de enero, en ese orden. Se
+conserva HGB v1 del experimento anterior. Cada pipeline incluye preprocesamiento,
+firma y dependencias y está asociado a su run y MAE/WAPE del fold. Las doce versiones
+se recuperaron y reprodujeron sus predicciones originales. No hay Champion ni aliases.
+
+[Detalles, carga y registro idempotente sin fit](docs/model_registry.md).
+
+## Ramas y etiquetas Git de modelado
+
+El código se publica por etapas con tags anotados; el PR conjunto no hace merge
+automático. [Mapa de ramas y tags](docs/publicacion_modelos.md). Los datos y pesos
+entrenados permanecen fuera de Git.
