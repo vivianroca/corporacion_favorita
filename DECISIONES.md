@@ -622,3 +622,32 @@ Se recomienda S3/compatible con prefijo exclusivo y acceso docente de lectura;
 el endpoint, plugin fijado y credenciales quedan pendientes de elección/autorización.
 La documentación detallada está en docs/dvc.md. No se modifican DAGs ni se entrenan
 modelos; no se fusionará el PR ni se creará entrega-lab1.
+
+## D046 — Baseline semanal autorizado y evaluación temporal
+
+Se autoriza únicamente un baseline puntual de siete días, independiente de Airflow
+y DVC. Se implementa en src/reposicion/baseline.py: para cada tienda/familia utiliza
+el mismo día de la semana previa. No ajusta hiperparámetros, usa covariables futuras
+ni convierte ventas a enteros. Entregas o claves ausentes producen error, no ceros.
+
+Se utiliza el catálogo simulado inmutable, porque los snapshots operativos actuales
+no contienen una semana completa. La selección usa available_at <= issued_at y la
+última revisión conocida. La verdad de evaluación se consulta después de construir
+los pronósticos, con otro corte. La prueba sintética verifica que una corrección
+posterior no sustituye la versión histórica conocida. El universo son las series
+observadas en la semana de referencia; series nuevas requieren una política futura.
+
+El origen elegido fue 2017-01-08: primera fecha comprobada a partir del día 8 con
+semana completa disponible, sin seleccionar por métricas. Emisión 12:00Z de ese día;
+evaluación al 2017-02-10T12:00Z. Se evaluaron 12.474 claves con cobertura idéntica.
+MAE=230.35504495348724, WAPE=0.4854428315163875 (fracción), sin afirmar que una semana
+represente el desempeño general. Para ventas reales todas cero, WAPE se declara
+indefinido; no se sustituye por cero. Las fechas comerciales siguen Ecuador y no
+alteran la zona del scheduler.
+
+MLflow existente registró el run b9e248ac36984fa893ada7b81b375892 en el experimento
+corporacion_favorita-baselines, FINISHED, con cinco artefactos comprobados por API.
+Se usa REST con biblioteca estándar, sin cambiar dependencias ni requirements.lock.
+Los artefactos locales permanecen en reports/ ignorado por Git. Se exige una carpeta
+nueva por ejecución para evitar sobrescrituras; cada ejecución crea su propio run.
+No se modifican originales, simulación, DAGs, servicios ni configuración DVC.

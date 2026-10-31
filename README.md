@@ -3,7 +3,7 @@
 Producto propuesto para generar pronósticos y pedidos por tienda y familia con
 trazabilidad mediante Git, DVC y Airflow. Están implementadas la base y la
 **etapa 3: ingesta, validación y snapshots temporales con Airflow**. La infraestructura
-exclusiva de lab1 incluye PostgreSQL y MLflow. No se entrenan modelos.
+exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadió un baseline semanal con evaluación temporal independiente de Airflow.
 
 ## Estado actual
 
@@ -11,10 +11,10 @@ exclusiva de lab1 incluye PostgreSQL y MLflow. No se entrenan modelos.
 - Python 3.12.16 disponible en `/opt/homebrew/bin/python3.12`; `.venv` local creado y verificado en ARM64.
 - `lab1/.venv` es el único entorno oficial del laboratorio.
 - Repositorio público: [corporacion_favorita](https://github.com/vivianroca/corporacion_favorita).
-- Ingesta integrada en main; versionado inicial de datos preparado en `feature/dvc`.
+- Ingesta y versionado inicial de originales con DVC integrados en `main`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 120 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
+- pytest 9.2.0: 125 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -238,6 +238,50 @@ se prepararán posteriormente. Ningún recurso del proyecto de bicicletas se reu
 
 ## Fuera del alcance actual
 
-No se modifican los originales ni se regeneran las entregas existentes. No se
-entrenan modelos ni se registran experimentos ficticios. La siguiente etapa requiere
-autorización. El remoto DVC externo y el producto de pronóstico se implementarán en su alcance.
+Permanecen pendientes los pedidos sugeridos y su evaluación por costos de negocio,
+la optimización de modelos y un período final independiente. No se modifican
+originales ni entregas existentes; el remoto DVC externo requiere configuración posterior.
+
+
+## Baseline estacional semanal
+
+La implementación independiente de Airflow está en `src/reposicion/baseline.py`.
+Para cada tienda y familia pronostica siete días mediante `predicción(d) = venta(d - 7)`.
+Lee únicamente la última revisión disponible **al momento de emisión** en el catálogo
+simulado existente. Conserva ceros y ventas fraccionarias; una entrega o registro
+faltante produce un error, sin imputación. Los valores reales se leen por separado,
+con un corte posterior, exclusivamente para evaluar.
+
+```bash
+.venv/bin/python -m reposicion.baseline \
+  --start 2017-01-08 \
+  --issued-at 2017-01-08T12:00:00Z \
+  --evaluated-at 2017-02-10T12:00:00Z \
+  --output reports/baseline/2017-01-08 \
+  --tracking-uri http://localhost:5011
+```
+
+Cada ejecución requiere una carpeta de salida nueva, para conservar los resultados
+anteriores. Registra un run real en `corporacion_favorita-baselines`, usando la API
+REST del MLflow existente, sin instalar dependencias adicionales. La carpeta local
+`reports/` permanece fuera de Git. MLflow conserva parámetros, MAE, WAPE y artefactos
+`forecast.csv`, `evaluation.csv`, `parameters.json`, `metrics.json` y `lineage.json`.
+Este último contiene recibos, revisiones y checksums de entradas y evaluación.
+`run.json` local permite encontrar la ejecución registrada.
+
+MAE es el promedio del error absoluto. WAPE es `sum(abs(real-predicción))/sum(real)`:
+se registra como fracción; multiplicar por 100 para expresarlo en porcentaje. Si
+todas las ventas reales son cero, WAPE es indefinido y se omite esa métrica en MLflow,
+con la etiqueta `wape_defined=false`; MAE sí se registra.
+
+La evaluación del 8 al 14 de enero de 2017 abarcó 54 tiendas × 33 familias × 7 días:
+12.474 observaciones, MAE **230,355045** y WAPE **48,544283 %**.
+Run verificado `FINISHED`: `b9e248ac36984fa893ada7b81b375892`.
+[Ver run en MLflow local](http://localhost:5011/#/experiments/1/runs/b9e248ac36984fa893ada7b81b375892).
+Es una evaluación de una sola semana, no una estimación de desempeño general.
+
+La emisión se expresa como instante con zona horaria. Las fechas de venta se
+interpretan en `America/Guayaquil`, correspondiente al origen ecuatoriano; esto
+no cambia la zona de Airflow. No se modificaron Airflow, DVC ni datos originales.
+El archivo `configs/forecasting.yaml` conserva el borrador del producto completo;
+este baseline utiliza los parámetros explícitos del comando y deja su copia en MLflow.
