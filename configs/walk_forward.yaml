@@ -1,0 +1,12 @@
+schema_version: 1
+forecast_starts:
+  - '2017-01-08'
+  - '2017-01-15'
+  - '2017-01-22'
+  - '2017-01-29'
+horizon_days: 7
+training_weeks: 8
+issue_time_utc: '12:00:00Z'
+evaluation_delay_days: 33
+training_window: rolling
+# Sin selección de hiperparámetros, aliases ni versiones nuevas en Registry.

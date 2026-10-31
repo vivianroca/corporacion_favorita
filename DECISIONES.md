@@ -622,3 +622,341 @@ Se recomienda S3/compatible con prefijo exclusivo y acceso docente de lectura;
 el endpoint, plugin fijado y credenciales quedan pendientes de elección/autorización.
 La documentación detallada está en docs/dvc.md. No se modifican DAGs ni se entrenan
 modelos; no se fusionará el PR ni se creará entrega-lab1.
+
+## D046 — Baseline semanal autorizado y evaluación temporal
+
+Se autoriza únicamente un baseline puntual de siete días, independiente de Airflow
+y DVC. Se implementa en src/reposicion/baseline.py: para cada tienda/familia utiliza
+el mismo día de la semana previa. No ajusta hiperparámetros, usa covariables futuras
+ni convierte ventas a enteros. Entregas o claves ausentes producen error, no ceros.
+
+Se utiliza el catálogo simulado inmutable, porque los snapshots operativos actuales
+no contienen una semana completa. La selección usa available_at <= issued_at y la
+última revisión conocida. La verdad de evaluación se consulta después de construir
+los pronósticos, con otro corte. La prueba sintética verifica que una corrección
+posterior no sustituye la versión histórica conocida. El universo son las series
+observadas en la semana de referencia; series nuevas requieren una política futura.
+
+El origen elegido fue 2017-01-08: primera fecha comprobada a partir del día 8 con
+semana completa disponible, sin seleccionar por métricas. Emisión 12:00Z de ese día;
+evaluación al 2017-02-10T12:00Z. Se evaluaron 12.474 claves con cobertura idéntica.
+MAE=230.35504495348724, WAPE=0.4854428315163875 (fracción), sin afirmar que una semana
+represente el desempeño general. Para ventas reales todas cero, WAPE se declara
+indefinido; no se sustituye por cero. Las fechas comerciales siguen Ecuador y no
+alteran la zona del scheduler.
+
+MLflow existente registró el run b9e248ac36984fa893ada7b81b375892 en el experimento
+corporacion_favorita-baselines, FINISHED, con cinco artefactos comprobados por API.
+Se usa REST con biblioteca estándar, sin cambiar dependencias ni requirements.lock.
+Los artefactos locales permanecen en reports/ ignorado por Git. Se exige una carpeta
+nueva por ejecución para evitar sobrescrituras; cada ejecución crea su propio run.
+No se modifican originales, simulación, DAGs, servicios ni configuración DVC.
+
+## D047 — Primer candidato Random Forest y comparación pareada
+
+La autorización se amplía únicamente a RandomForestRegressor con horizonte siete,
+sin modificar Airflow ni DVC ni asignar champion. Se mantiene el baseline existente
+y se comprueban sus contratos, catálogo, predicciones, claves y reales por igualdad.
+Ambos modelos evalúan 12.474 observaciones del 8–14 de enero de 2017, con emisión
+2017-01-08T12:00Z y evaluación 2017-02-10T12:00Z.
+
+Se entrena un modelo global con codificación de tienda/familia/calendario, horizonte,
+rezagos 7/14/21/28 y promedio/conteo de los siete días anteriores al origen. Ocho
+orígenes semanales anteriores reconstruyen las variables con su disponibilidad real
+simulada a las 12Z de cada origen. Las etiquetas se seleccionan al corte final de
+entrenamiento y siempre tienen fecha anterior al horizonte evaluado. No se usan
+ventas del horizonte como variables, ni revisiones futuras, ni particiones aleatorias.
+
+Los faltantes no se interpretan como ceros: NaN más indicadores y medianas ajustadas
+solo con entrenamiento. Las columnas enteramente ausentes conservan una constante
+junto al indicador. Se excluyen etiquetas inexistentes y se registra su cantidad:
+1.782 del 25 de diciembre; quedan 98.010 filas. El universo de series sigue siendo
+el conocido por el baseline. No hay ajuste de hiperparámetros contra la evaluación.
+Parámetros: 64 árboles, profundidad 16, mínimo cinco muestras por hoja,
+max_features=0.7, random_state=42 y n_jobs=2.
+
+Se fijaron scikit-learn 1.9.1 y matplotlib 3.11.2; se resolvió requirements.lock con
+hashes bajo Python 3.12.16 y se instaló en .venv. DVC permanece en 3.67.1; no se
+modifica su configuración ni sus punteros. pip-tools necesitó acceso a su caché
+fuera del sandbox y terminó correctamente. pip check no detectó incompatibilidades.
+
+MLflow registró el run b9628a0e6bf94d2a878ffa2c82ed0fdd, experimento
+corporacion_favorita-candidatos, FINISHED. MAE=191.13634188309385,
+WAPE=0.40279459487483094 como fracción: reducción relativa 17.025328 % frente al
+baseline. Se guardaron doce artefactos, incluyendo pipeline joblib, predicciones,
+comparación, lock, trazabilidad y dos PNG; se descargaron y verificaron sus SHA-256.
+El modelo queda como artefacto del run, sin promoverlo al registro ni crear aliases.
+
+La suite completa aprueba 129 pruebas y Ruff/formato. El resultado representa una
+semana y mantiene sobrepronóstico agregado varios días: no justifica aún promoción.
+La implementación y comandos se documentan en docs/random_forest.md y README.md.
+
+## D048 — System Metrics para los siguientes entrenamientos
+
+Se autoriza preparar CPU, RAM y duración sin volver a entrenar los modelos existentes.
+psutil 7.2.2 ya estaba en .venv como dependencia transitiva; ahora se fija explícitamente.
+Se añade mlflow-skinny 3.17.2 para utilizar el monitor oficial de MLflow, y se actualiza
+requirements.lock con hashes bajo Python 3.12. No se modifica Airflow ni DVC.
+
+Antes el cliente REST creaba el run al finalizar el trabajo y no podía muestrear el
+entrenamiento. Random Forest ahora utiliza training_run, que abre el run antes de
+preparar las filas y usa log_system_metrics=True. Se muestrea cada segundo con una
+muestra por publicación. La CPU y la memoria corresponden al host de ejecución,
+no al proceso aislado ni al contenedor MLflow. Se documenta la posible ausencia de
+muestras en trabajos inferiores al intervalo; no se inventan valores retrospectivos.
+
+Se registra training_duration_seconds alrededor de model.fit y execution_duration_seconds
+con reloj monotónico alrededor de preparación, ajuste, evaluación y subida de artefactos.
+La duración total también se intenta registrar ante fallos; el contexto cierra el run
+y restaura URI e intervalos. Se rechaza reutilizar un run activo. MAE, WAPE, predicciones,
+modelo y gráficas se conservan. El baseline sin ajuste mantiene el cliente existente.
+
+La comprobación se limita a tests aislados del ciclo de vida y al colector oficial
+CPU/RAM en este entorno. No se ejecutan comandos de entrenamiento ni se crean runs
+ficticios en el servidor. La verificación de series reales publicadas se realizará
+en el siguiente entrenamiento autorizado. No se asigna champion ni se alteran métricas
+históricas para simular que estuvieron instrumentadas.
+
+Resultado de esta preparación: 134 pruebas aprobadas; Ruff, formato y pip check
+correctos. El colector oficial de CPU/RAM funciona en .venv. Las consultas de ambos
+runs existentes coinciden íntegramente con su estado anterior (parámetros, métricas,
+tags y metadatos). No se ejecutó entrenamiento real ni se modificaron esos runs.
+
+## D049 — HistGradientBoosting autorizado, System Metrics reales y Registry
+
+Se autoriza un nuevo candidato HistGradientBoostingRegressor y su registro en Model
+Registry, sin modificar Airflow ni DVC ni asignar champion. Se reutilizan las funciones
+de variables, lecturas por disponibilidad y entrenamiento de Random Forest. Se exige
+la misma trazabilidad de entrenamiento y las mismas claves y reales de evaluación.
+No se reentrenan ni se modifican los runs anteriores.
+
+Se fijaron antes del resultado: loss=poisson (ventas no negativas, sin redondeo),
+learning_rate=0.08, max_iter=150, max_leaf_nodes=31, min_samples_leaf=20,
+l2_regularization=1.0, max_bins=255, random_state=42 y early_stopping=False.
+No se hace selección aleatoria interna ni búsqueda sobre el horizonte de evaluación.
+La codificación e imputación coinciden exactamente con Random Forest. El pipeline
+acepta DataFrame para poder usar el formato sklearn/pyfunc de MLflow y conservar
+el preprocesamiento dentro del modelo registrado. Se limita fit/predict a dos hilos.
+
+Se agregó pandas 3.1.0 para el formato MLflow, con lock y hashes bajo Python 3.12.
+La primera prueba detectó que MLflow elegía skops por defecto; se fijó cloudpickle
+explícitamente, ya instalado, y se comprobó la recuperación del modelo propio.
+No fue necesario instalar skops ni cambiar infraestructura.
+
+98.010 filas y ocho orígenes anteriores, emisión 2017-01-08T12:00Z y evaluación
+2017-02-10T12:00Z. Las 12.474 observaciones del 8–14 de enero coinciden con los dos
+modelos anteriores. MAE=207.9089128775264, WAPE=0.4381405728932026 como fracción.
+Mejora al baseline, pero Random Forest sigue con menor error; no se reajustan los
+parámetros tras observarlo ni se concluye desempeño general con una sola semana.
+
+Run 39562417052c45bb8dece31675763d19, FINISHED. Se verificaron 16 muestras de CPU/RAM
+del host, ajuste de 5.730457833000401 segundos y ejecución de 17.364074500001152.
+Model Registry: corporacion_favorita_hist_gradient_boosting, versión 1, READY,
+sin aliases. Se guardan artefactos y gráficas, y un MLflow Model con firma y ejemplo
+de entrada, además de comparación con baseline y Random Forest.
+La suite aprueba 137 pruebas; Ruff/formato y pip check correctos. Las advertencias
+no bloqueantes de dependencias se documentan en docs/hist_gradient_boosting.md.
+
+Verificación posterior: la versión 1 recuperada desde Registry reproduce las
+12.474 predicciones por sklearn y pyfunc (tolerancia 1e-12). Los doce artefactos
+del run conservan SHA-256 idénticos al descargarlos. Los dos runs anteriores
+conservan íntegramente estado, parámetros, métricas, tags y metadatos.
+
+## D050 — Walk-forward real de cuatro cortes, sin selección de Champion
+
+Se autoriza reentrenar los candidatos ML por corte para validación, ampliando la
+restricción anterior de no reentrenamiento. Se crean resultados y runs nuevos sin
+sobrescribir los históricos. Configuración externa en configs/walk_forward.yaml;
+lógica independiente en src/reposicion/walk_forward.py, sin modificar Airflow o DVC.
+
+Se eligen los domingos 8, 15, 22 y 29 de enero de 2017 a las 12Z, para mantener el
+origen previo y cuatro cortes semanales de enero; el último horizonte termina el
+4 de febrero. Los cuatro tienen la historia semanal disponible que exige el baseline.
+No se omiten ventanas ni se imputan ceros para lograr comparación. Se conserva un
+universo de 1.782 series, 12.474 filas por ventana y 49.896 por modelo.
+
+Se usa ventana móvil (rolling), no expansiva: ocho semanas de etiquetas conocidas
+al corte, como en los candidatos anteriores. Los inicios ML son 2016-11-13,
+2016-11-20, 2016-11-27 y 2016-12-04; fines 2017-01-07, 14, 21 y 28. Cada corte
+mantiene 98.010 etiquetas, excluyendo 1.782 inexistentes del 25 de diciembre.
+Se reconstruyen variables con revisiones disponibles en cada origen histórico.
+Ambos candidatos comparten filas y etiquetas, verificables por SHA-256; se ajustan
+ocho pipelines nuevos sin warm start ni búsqueda de hiperparámetros. El baseline
+no ajusta parámetros y utiliza solo la última semana conocida.
+
+La verdad de evaluación se consulta con desfase fijo de 33 días desde cada emisión:
+10, 17 y 24 de febrero y 3 de marzo a las 12Z. Es una elección de evaluación para
+conservar la maduración del primer experimento, no un SLA inferido de los CSV.
+Los reales se leen después de predecir para cada modelo y nunca entran al ajuste.
+La igualdad de fechas/claves/reales se exige para los tres modelos por ventana.
+
+El agregado MAE usa error total dividido por número de filas; WAPE usa error total
+dividido por ventas totales, no media de WAPE. Se publican además media y desvío
+poblacional de cada métrica por ventana. Un WAPE indefinido no se sustituye por cero.
+La prueba sintética comprueba ocho instancias nuevas, cortes de disponibilidad,
+igualdad de muestras, ventanas semanales, agregación ponderada y ceros/duplicados.
+
+Ejecución real 107d7f6f8961472b8fdf46647ed4f224, experimento MLflow 3:
+12 runs modelo/ventana y tres agregados, todos FINISHED. MAE/WAPE globales:
+baseline 107.0769410822611 / 0.22470658133215438;
+Random Forest 112.48541399213852 / 0.23605654562439596;
+HistGradientBoosting 130.97906021517966 / 0.2748664329553512.
+Las fracciones WAPE se muestran como porcentajes en README y docs/walk_forward.md.
+
+Cada run de ventana guarda predicciones, evaluación, gráficos y trazabilidad; los
+ML además su pipeline, métricas de duración y System Metrics del host. No se generan
+versiones de Registry para estos ajustes de validación ni se promueve un candidato.
+La suite completa aprueba 142 pruebas y Ruff/formato. No cambian dependencias.
+
+Verificación final: 15 runs FINISHED, métricas idénticas a archivos locales, CPU/RAM
+y duración en los ocho entrenamientos ML. Se descargaron 116 artefactos con SHA-256
+idénticos. Los tres runs previos y todas las versiones/aliases de Registry conservan
+su estado anterior. La auditoría de publicación pasa y Git confirma ausencia de
+cambios en DAGs, Docker, configuración DVC y punteros de originales.
+
+## D051 — Variables temporales v2, sin alterar baseline ni hiperparámetros
+
+Se autoriza incorporar calendario conocido e indicadores de rezagos excepcionales,
+y eliminar imputación global que mezcla familias. La extensión opcional del runner
+mantiene reproducible la ruta v1; la nueva entrada temporal_walk_forward usa un
+experimento independiente. No se toca el código del baseline ni los parámetros de
+RF/HGB, y no se amplía el entrenamiento ni se modifican cortes o evaluación.
+
+Se seleccionan por disponibilidad y revisión los recibos de holidays_events y stores
+para cada origen histórico y de pronóstico. National aplica a todas las tiendas;
+Regional al estado y Local a la ciudad. Se distinguen feriado activo, traslado,
+Work Day y Event. transferred=True conserva contexto excepcional pero no se marca
+feriado activo. No se infieren cierres reales de tienda ni se inventa conocimiento
+anticipado de eventos. El simulador entrega por fecha: cuando mezcla planificados e
+inesperados, se respeta la publicación conservadora de todo el recibo. Sin registro
+solo significa sin evento conocido, no certeza de día ordinario.
+
+Se mantienen rezagos observados y flags de ausencia; se agregan flags de cero real
+y contexto excepcional, mediana de rezagos semanales ordinarios y promedio reciente
+sin eventos conocidos con sus conteos. Las nuevas referencias usan exclusivamente
+ventas anteriores al origen y calendario conocido entonces. Los ceros no se borran.
+
+SeriesFamilyImputer sustituye SimpleImputer global únicamente en v2. Primero usa
+rezagos comparables conocidos de la misma serie para rellenar un rezago ausente;
+luego medianas de columna por serie/familia ajustadas en entrenamiento; después
+respaldo de la misma familia. Si no hay historia válida, aborta. Nunca mezcla familias,
+no ajusta estadísticas con validación y excluye rezagos excepcionales de las medianas
+de relleno. Los flags originales de ausencia se conservan después de imputar.
+
+Pruebas: alcance territorial, traslado, eventos aún no publicados, ceros/ausencias,
+escalas de familias, igualdad exacta de hiperparámetros y recorridos completos v1/v2.
+149 pruebas aprobadas y Ruff/formato correctos. No se añaden dependencias.
+
+Resultado real: grupo 38f20499009a405da5231d65382aed8d, experimento MLflow 4,
+corporacion_favorita-walk-forward-temporal-v2. Sobre 49.896 registros por modelo:
+baseline MAE=107.0769410822611, WAPE=0.22470658133215438;
+RF v2 MAE=90.5625721282446, WAPE=0.19005031124255538;
+HGB v2 MAE=102.02235699583552, WAPE=0.21409927131155868.
+Los tres modelos mantienen las mismas cuatro ventanas y las 98.010 etiquetas por
+ajuste ML. El baseline reproduce exactamente sus predicciones y reales anteriores.
+
+Se publican runs y artefactos nuevos, sin sobrescribir v1 ni crear aliases o versiones
+de Registry para validación. No se selecciona Champion. Los resultados corresponden
+al paquete de nuevas variables e imputación, no a una ablación de efectos individuales.
+Como enero se inspeccionó para diseñar las variables, la comparación es de desarrollo;
+queda pendiente un período independiente para estimar generalización sin selección.
+
+Verificación posterior: 15 runs nuevos FINISHED, System Metrics en los ocho ajustes,
+72 contextos de calendario sin recibos posteriores al corte, 116 artefactos con
+SHA-256 idénticos al descargarlos. Los ocho estimadores persistidos conservan sus
+hiperparámetros v1. Se comprobó igualdad íntegra de los 18 runs anteriores y Registry,
+y hash idéntico del código baseline. Sus archivos forecast/evaluation coinciden
+byte a byte en los cuatro cortes. Auditoría de publicación aprobada.
+
+## D052 — CatBoost inicial con cuatro folds y variables temporales v2
+
+Se autoriza CatBoostRegressor sin optimización ni Champion. Se añade catboost 1.2.10
+con wheel cp312 macOS universal2, fijado en pyproject y requirements.lock generado
+bajo Python 3.12; se instala únicamente en .venv. Sus dependencias graphviz y plotly
+quedan bloqueadas; no se requiere ejecutar Graphviz ni instalar herramientas globales.
+La generación de hashes terminó correctamente tras descargar/resolver dependencias.
+
+Se conserva configs/walk_forward.yaml y la variante temporal v2: disponibilidad,
+calendario por alcance, indicadores de ausencia/cero/excepción y relleno por serie
+con respaldo exclusivo de la misma familia. La primera versión utiliza DictVectorizer
+igual a RF/HGB, sin introducir además codificación categórica nativa. Se exige igual
+huella de filas/etiquetas, trazabilidad, calendario, cortes y claves/reales evaluados.
+Los 98.010 ejemplos por fold y 49.896 registros evaluados coinciden con v2.
+
+Parámetros fijados antes de medir: 300 iteraciones, profundidad 6, learning_rate=0.05,
+RMSE con métrica MAE, semilla 42, CPU, dos hilos de ajuste, boosting_type Plain,
+has_time True, use_best_model False y allow_writing_files False. No hay eval_set,
+early stopping, búsqueda ni selección de iteración. Los defaults resueltos se guardan
+con get_all_params. Se mantienen las etiquetas fraccionarias; la predicción aplica
+piso cero fijo, guardado dentro del pipeline, sin elegir ese piso por validación.
+El CBM contiene el estimador crudo y requiere el preprocesamiento y ese piso.
+
+Se crean cinco runs nuevos en corporacion_favorita-catboost-temporal-v2, experimento 5,
+grupo f34f181e5d82463db7c2aba64ce572d9: cuatro folds y agregado micro/macro.
+MAE global=92.13316590687047, WAPE=0.19334628472750431 como fracción.
+Por fold MAE/WAPE: 130.75032781366866 / 0.2755390461206494;
+93.46232316370083 / 0.1963012306306949;
+63.84011581900496 / 0.13999281546031304;
+80.47989683110742 / 0.1611502476797976.
+Hay 9.473 predicciones crudas negativas en total; los pronósticos evaluados aplican
+el piso cero y la métrica registra sus cantidades por fold de forma transparente.
+
+Se guardan pipeline joblib, CBM, parámetros, importancias, predicciones, evaluación,
+lock, gráficos y trazabilidad; CPU/RAM y duración se registran en cada ajuste.
+Una verificación entre procesos detectó que la clase definida en la CLI se serializaba
+bajo __main__. Se movió a catboost_model.py, se agregó una prueba de regresión y se
+volvieron a guardar los estados ya ajustados, sin repetir entrenamientos ni alterar
+los CBM originales, métricas o predicciones. La corrección se marca en los cuatro
+runs propios y su lineage. No se modifican runs anteriores al inicio de esta tarea.
+
+Verificación final: cinco runs FINISHED, 300 árboles por fold y sin evaluación interna.
+Se recuperan las 49.896 predicciones desde joblib y CBM con preprocesamiento/piso,
+tolerancia 1e-12. Las medianas y columnas codificadas coinciden con RF v2. Se descargan
+59 artefactos con SHA-256 idénticos. Los 33 runs previos, versiones/aliases de Registry
+y código baseline conservan su estado. No se modifican Airflow, DVC ni originales.
+154 pruebas aprobadas; Ruff/formato y pip check correctos. Los resultados son de
+comparación de desarrollo sobre enero ya inspeccionado, no evaluación final inédita.
+
+## D053 — Registro de modelos ya ajustados, sin nuevos entrenamientos
+
+El usuario autoriza publicar los modelos existentes en Models de MLflow y recalca
+que no se vuelvan a entrenar. Se publican los doce pipelines temporales v2 de los
+cuatro folds: RF versiones 1–4, HGB versiones 2–5 y CatBoost versiones 1–4. Se conserva
+HGB versión 1 y su Logged Model del experimento anterior. La autorización de registro
+actual amplía la decisión previa de mantener los ajustes de validación solo como
+artefactos. No implica selección de Champion ni promoción de ninguna versión.
+
+register_models.py carga los estados joblib existentes y reconstruye únicamente las
+entradas de inferencia conocidas al corte para verificar sus predicciones. No contiene
+llamadas a fit ni crea runs de entrenamiento. Se empaqueta el pipeline completo con
+firma, ejemplo, código y dependencias, formato sklearn/pyfunc mediante cloudpickle.
+Se crean Logged Models vinculados a los runs de origen, se publican sus artefactos
+y se crean versiones de Registered Models apuntando a esos modelos, todos READY.
+
+Para mostrar MAE/WAPE en Logged Models se reutiliza el mismo evento histórico
+(valor/timestamp/step) con model_id. El backend MLflow 3.17.2 deduplica los eventos
+del run, hecho verificado comparando sus historiales antes/después. Se agregan las
+asociaciones de modelos a outputs de sus runs sin modificar info, parámetros, tags,
+valores o historiales de métricas. Los resultados globales siguen en runs agregados;
+las versiones muestran las métricas de su propio fold, sin confundir ambos niveles.
+
+Se verifica por pyfunc la recuperación de las doce versiones y sus 12.474 predicciones
+por modelo, tolerancia 1e-12, además de estados READY y métricas asociadas. Se conservan
+38 runs, sus metadatos/datos e historiales, y la versión 1 anterior de HGB. El script se
+repitió sin crear duplicados. El mapa local registrations.json está ignorado por Git.
+No hubo nuevos entrenamientos, hiperparámetros, dependencias, aliases o stages de
+promoción. No se modifican Airflow ni DVC. Ruff y formato pasan; la comprobación de
+esta tarea se realiza exclusivamente con carga/inferencia y lectura de metadatos.
+
+## D054 — Separación en commits, ramas y tags Git autorizados
+
+El usuario autoriza publicar el código pendiente por ramas y aclara que las etiquetas
+son tags de Git, sin comentarios añadidos a archivos de modelos. Se respalda primero
+el trabajo y se separa en siete etapas acumulativas, documentadas en
+docs/publicacion_modelos.md. El lock compartido se versiona desde Random Forest;
+no se generan locks con otro intérprete ni se modifican datos o pesos entrenados.
+
+Cada etapa se valida, se audita y recibe un tag anotado lab1-*. Se prepara un PR
+conjunto feature/modelos-pronostico hacia main. No se hace merge, no se crea
+entrega-lab1 y no se selecciona Champion. Se conserva la exclusión de secretos,
+CSV, simulaciones, snapshots, modelos, predicciones y almacenamiento Docker.

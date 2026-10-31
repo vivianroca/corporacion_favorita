@@ -1,0 +1,16 @@
+schema_version: 1
+# Configuración inicial fija: no búsqueda, eval_set ni early stopping.
+parameters:
+  iterations: 300
+  depth: 6
+  learning_rate: 0.05
+  loss_function: RMSE
+  eval_metric: MAE
+  random_seed: 42
+  thread_count: 2
+  task_type: CPU
+  boosting_type: Plain
+  has_time: true
+  use_best_model: false
+  allow_writing_files: false
+  verbose: false
