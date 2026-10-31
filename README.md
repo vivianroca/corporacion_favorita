@@ -96,8 +96,13 @@ make lint
 - PostgreSQL es interno y exclusivo de lab1; no publica un puerto del host.
 - DAG `lab1_ingesta_temporal`: descubrir → ingestar → validar → publicar snapshot.
 - La simulación existente está montada en solo lectura; no se montan originales.
-- El DAG sondea `data/operational_inbox` cada cinco minutos. Un ledger persistente
-  registra IDs, revisiones y checksums; solo se ingieren archivos pendientes.
+- El DAG sondea `data/operational_inbox` cada tres horas con cron `0 */3 * * *`,
+  en la zona horaria `America/Guatemala` (UTC−6): minuto cero de las horas 00, 03, 06, 09,
+  12, 15, 18 y 21. Un ledger persistente registra IDs, revisiones y checksums;
+  solo se ingieren archivos pendientes.
+- Se mantiene `catchup=False`: Airflow no crea automáticamente ejecuciones de
+  intervalos pasados pendientes. Esto no descarta entregas atrasadas ni correcciones:
+  el siguiente ciclo sigue detectando los archivos pendientes mediante el ledger.
 - Sin novedades termina con éxito sin crear publicaciones. Las correcciones crean
   otra versión sin sobrescribir publicaciones anteriores.
 - Con `as_of` manual conserva el backfill por períodos sobre el catálogo maestro,

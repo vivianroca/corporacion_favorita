@@ -622,3 +622,18 @@ Se recomienda S3/compatible con prefijo exclusivo y acceso docente de lectura;
 el endpoint, plugin fijado y credenciales quedan pendientes de elección/autorización.
 La documentación detallada está en docs/dvc.md. No se modifican DAGs ni se entrenan
 modelos; no se fusionará el PR ni se creará entrega-lab1.
+
+## D046 — Cadencia de ingesta cada tres horas
+
+Por instrucción del usuario, el DAG lab1_ingesta_temporal cambia a `0 */3 * * *`:
+minuto cero cada tres horas en America/Guayaquil. Se conservan catchup=False,
+el estado habilitado, el consumo incremental y el backfill manual. Las pruebas y
+evidencias anteriores a esta decisión conservaron su cadencia histórica de cinco
+minutos. Se actualizan las instrucciones operativas y la imagen de Airflow.
+
+## D047 — Zona horaria operativa de Guatemala
+
+Por instrucción del usuario, la programación del DAG usa America/Guatemala (UTC−6).
+Se conserva el cron 0 */3 * * *, catchup=False y el DAG habilitado. Los horarios de
+disponibilidad histórica del simulador continúan expresados según su política de
+fuentes de Ecuador; este cambio afecta al calendario de ejecución de Airflow.

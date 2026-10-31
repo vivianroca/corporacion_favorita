@@ -1,4 +1,4 @@
-"""Sondeo cada cinco minutos y backfill manual por corte explícito."""
+"""Sondeo cada tres horas y backfill manual por corte explícito."""
 
 from datetime import timedelta
 
@@ -10,8 +10,8 @@ from reposicion import automatic, ingestion
 
 @dag(
     dag_id="lab1_ingesta_temporal",
-    schedule="*/5 * * * *",
-    start_date=pendulum.datetime(2017, 1, 1, tz="America/Guayaquil"),
+    schedule="0 */3 * * *",
+    start_date=pendulum.datetime(2017, 1, 1, tz="America/Guatemala"),
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,

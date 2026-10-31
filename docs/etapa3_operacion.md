@@ -1,7 +1,7 @@
 # Etapa 3: ingesta temporal, Airflow y MLflow
 
 Esta guía conserva la implementación inicial por corte. La configuración vigente
-añade sondeo cada cinco minutos y una bandeja operativa: ver
+añade sondeo cada tres horas y una bandeja operativa: ver
 [ingesta_automatica.md](ingesta_automatica.md). Los ejemplos manuales de backfill
 siguen siendo válidos.
 
@@ -118,7 +118,7 @@ El DAG usa TaskFlow SDK de Airflow 3 y transporta solo el ID del plan entre tare
 Se limita a una ejecución activa; cada tarea tiene un reintento idempotente.
 
 La ruta de backfill exige `as_of` con zona horaria. La configuración vigente del DAG
-usa `*/5 * * * *` para el sondeo incremental de otra bandeja; un ciclo programado no
+usa `0 */3 * * *` para el sondeo incremental de otra bandeja; un ciclo programado no
 dispara todo el catálogo maestro. `as_of` manual selecciona la ruta histórica aquí
 documentada. No se utiliza el intervalo de un trigger manual como corte del backfill.
 

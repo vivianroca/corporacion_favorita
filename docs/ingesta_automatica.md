@@ -2,9 +2,11 @@
 
 ## Operación normal
 
-`lab1_ingesta_temporal` usa `schedule="*/5 * * * *"`, `catchup=False` y
+`lab1_ingesta_temporal` usa `schedule="0 */3 * * *"`, `catchup=False` y
 `max_active_runs=1`. Está habilitado. El scheduler crea los runs; no se necesita
-un proceso externo que llame a `airflow dags trigger` cada cinco minutos.
+un proceso externo que llame a `airflow dags trigger` cada tres horas.
+El cron usa la zona del DAG, `America/Guatemala` (UTC−6): minuto cero de las horas
+00, 03, 06, 09, 12, 15, 18 y 21.
 
 El DAG tiene dos rutas:
 
