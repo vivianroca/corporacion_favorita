@@ -651,3 +651,73 @@ Se usa REST con biblioteca estándar, sin cambiar dependencias ni requirements.l
 Los artefactos locales permanecen en reports/ ignorado por Git. Se exige una carpeta
 nueva por ejecución para evitar sobrescrituras; cada ejecución crea su propio run.
 No se modifican originales, simulación, DAGs, servicios ni configuración DVC.
+
+## D047 — Primer candidato Random Forest y comparación pareada
+
+La autorización se amplía únicamente a RandomForestRegressor con horizonte siete,
+sin modificar Airflow ni DVC ni asignar champion. Se mantiene el baseline existente
+y se comprueban sus contratos, catálogo, predicciones, claves y reales por igualdad.
+Ambos modelos evalúan 12.474 observaciones del 8–14 de enero de 2017, con emisión
+2017-01-08T12:00Z y evaluación 2017-02-10T12:00Z.
+
+Se entrena un modelo global con codificación de tienda/familia/calendario, horizonte,
+rezagos 7/14/21/28 y promedio/conteo de los siete días anteriores al origen. Ocho
+orígenes semanales anteriores reconstruyen las variables con su disponibilidad real
+simulada a las 12Z de cada origen. Las etiquetas se seleccionan al corte final de
+entrenamiento y siempre tienen fecha anterior al horizonte evaluado. No se usan
+ventas del horizonte como variables, ni revisiones futuras, ni particiones aleatorias.
+
+Los faltantes no se interpretan como ceros: NaN más indicadores y medianas ajustadas
+solo con entrenamiento. Las columnas enteramente ausentes conservan una constante
+junto al indicador. Se excluyen etiquetas inexistentes y se registra su cantidad:
+1.782 del 25 de diciembre; quedan 98.010 filas. El universo de series sigue siendo
+el conocido por el baseline. No hay ajuste de hiperparámetros contra la evaluación.
+Parámetros: 64 árboles, profundidad 16, mínimo cinco muestras por hoja,
+max_features=0.7, random_state=42 y n_jobs=2.
+
+Se fijaron scikit-learn 1.9.1 y matplotlib 3.11.2; se resolvió requirements.lock con
+hashes bajo Python 3.12.16 y se instaló en .venv. DVC permanece en 3.67.1; no se
+modifica su configuración ni sus punteros. pip-tools necesitó acceso a su caché
+fuera del sandbox y terminó correctamente. pip check no detectó incompatibilidades.
+
+MLflow registró el run b9628a0e6bf94d2a878ffa2c82ed0fdd, experimento
+corporacion_favorita-candidatos, FINISHED. MAE=191.13634188309385,
+WAPE=0.40279459487483094 como fracción: reducción relativa 17.025328 % frente al
+baseline. Se guardaron doce artefactos, incluyendo pipeline joblib, predicciones,
+comparación, lock, trazabilidad y dos PNG; se descargaron y verificaron sus SHA-256.
+El modelo queda como artefacto del run, sin promoverlo al registro ni crear aliases.
+
+La suite completa aprueba 129 pruebas y Ruff/formato. El resultado representa una
+semana y mantiene sobrepronóstico agregado varios días: no justifica aún promoción.
+La implementación y comandos se documentan en docs/random_forest.md y README.md.
+
+## D048 — System Metrics para los siguientes entrenamientos
+
+Se autoriza preparar CPU, RAM y duración sin volver a entrenar los modelos existentes.
+psutil 7.2.2 ya estaba en .venv como dependencia transitiva; ahora se fija explícitamente.
+Se añade mlflow-skinny 3.17.2 para utilizar el monitor oficial de MLflow, y se actualiza
+requirements.lock con hashes bajo Python 3.12. No se modifica Airflow ni DVC.
+
+Antes el cliente REST creaba el run al finalizar el trabajo y no podía muestrear el
+entrenamiento. Random Forest ahora utiliza training_run, que abre el run antes de
+preparar las filas y usa log_system_metrics=True. Se muestrea cada segundo con una
+muestra por publicación. La CPU y la memoria corresponden al host de ejecución,
+no al proceso aislado ni al contenedor MLflow. Se documenta la posible ausencia de
+muestras en trabajos inferiores al intervalo; no se inventan valores retrospectivos.
+
+Se registra training_duration_seconds alrededor de model.fit y execution_duration_seconds
+con reloj monotónico alrededor de preparación, ajuste, evaluación y subida de artefactos.
+La duración total también se intenta registrar ante fallos; el contexto cierra el run
+y restaura URI e intervalos. Se rechaza reutilizar un run activo. MAE, WAPE, predicciones,
+modelo y gráficas se conservan. El baseline sin ajuste mantiene el cliente existente.
+
+La comprobación se limita a tests aislados del ciclo de vida y al colector oficial
+CPU/RAM en este entorno. No se ejecutan comandos de entrenamiento ni se crean runs
+ficticios en el servidor. La verificación de series reales publicadas se realizará
+en el siguiente entrenamiento autorizado. No se asigna champion ni se alteran métricas
+históricas para simular que estuvieron instrumentadas.
+
+Resultado de esta preparación: 134 pruebas aprobadas; Ruff, formato y pip check
+correctos. El colector oficial de CPU/RAM funciona en .venv. Las consultas de ambos
+runs existentes coinciden íntegramente con su estado anterior (parámetros, métricas,
+tags y metadatos). No se ejecutó entrenamiento real ni se modificaron esos runs.

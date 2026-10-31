@@ -3,7 +3,8 @@
 Producto propuesto para generar pronósticos y pedidos por tienda y familia con
 trazabilidad mediante Git, DVC y Airflow. Están implementadas la base y la
 **etapa 3: ingesta, validación y snapshots temporales con Airflow**. La infraestructura
-exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadió un baseline semanal con evaluación temporal independiente de Airflow.
+exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadieron un baseline semanal y
+Random Forest como primer candidato, con evaluación temporal independiente de Airflow.
 
 ## Estado actual
 
@@ -14,7 +15,7 @@ exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadió un baseline semanal c
 - Ingesta y versionado inicial de originales con DVC integrados en `main`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 125 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
+- pytest 9.2.0: 134 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -285,3 +286,67 @@ interpretan en `America/Guayaquil`, correspondiente al origen ecuatoriano; esto
 no cambia la zona de Airflow. No se modificaron Airflow, DVC ni datos originales.
 El archivo `configs/forecasting.yaml` conserva el borrador del producto completo;
 este baseline utiliza los parámetros explícitos del comando y deja su copia en MLflow.
+
+## Random Forest: primer candidato
+
+El módulo `src/reposicion/random_forest.py` entrena un modelo global por tienda y
+familia, con horizonte de siete días. Usa categorías, calendario conocido, rezagos
+de ventas y estadísticas de la semana previa al origen. Las variables se reconstruyen
+con las revisiones disponibles en cada corte histórico; la imputación se ajusta solo
+en entrenamiento. Conserva exactamente las claves y reales del baseline para evaluar.
+
+```bash
+.venv/bin/python -m reposicion.random_forest \
+  --baseline reports/baseline/2017-01-08 \
+  --output reports/random_forest/2017-01-08 \
+  --tracking-uri http://localhost:5011
+```
+
+Comparación sobre el **8–14 de enero de 2017**, con emisión al **2017-01-08T12:00Z**,
+reales disponibles al **2017-02-10T12:00Z** y **12.474 observaciones** en ambos casos:
+
+| Modelo | MAE | WAPE |
+|---|---:|---:|
+| Baseline semanal | 230,355045 | 48,544283 % |
+| Random Forest | 191,136342 | 40,279459 % |
+
+Random Forest reduce ambos errores un **17,03 % relativo** en esta semana. Se entrenó
+con 98.010 ejemplos de ocho orígenes anteriores; se excluyeron 1.782 etiquetas
+inexistentes del 25 de diciembre. No se ajustaron hiperparámetros con la evaluación.
+
+[Run del candidato en MLflow](http://localhost:5011/#/experiments/2/runs/b9628a0e6bf94d2a878ffa2c82ed0fdd),
+verificado `FINISHED`: modelo entrenado, parámetros, métricas, predicciones, comparación,
+importancias, trazabilidad, lock y gráficas de reales frente a pronósticos y distribución
+de errores. Los doce artefactos se descargaron y verificaron por SHA-256.
+
+Las dependencias nuevas, `scikit-learn==1.9.1` y `matplotlib==3.11.2`, están instaladas
+en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 134 pruebas.
+[Detalles del diseño y disponibilidad temporal](docs/random_forest.md).
+No se asignó `champion`; la comparación de una semana no basta para promover un modelo.
+
+## System Metrics en próximos entrenamientos
+
+El siguiente entrenamiento de Random Forest abrirá su run **antes de preparar las
+filas y ajustar el modelo**, con `mlflow.start_run(log_system_metrics=True)`.
+No hace falta cambiar el comando de ejecución. Se utiliza `mlflow-skinny==3.17.2`
+y `psutil==7.2.2` en `.venv`, fijados en `pyproject.toml` y en el lock con hashes.
+
+El monitor oficial muestrea cada segundo y registra CPU y RAM bajo `system/`,
+incluyendo `system/cpu_utilization_percentage`,
+`system/system_memory_usage_megabytes` y `system/system_memory_usage_percentage`.
+Estas mediciones corresponden al **host que ejecuta Python**, no al contenedor
+servidor de MLflow ni exclusivamente al proceso del modelo. El monitor también
+puede registrar disco y red. Para ejecuciones menores de un segundo puede no haber
+muestras periódicas; no se retrasa el entrenamiento artificialmente.
+
+Además se guardan `training_duration_seconds` (tiempo de `model.fit`, incluida la
+codificación e imputación) y `execution_duration_seconds` (desde la preparación de
+filas hasta el guardado/subida de resultados, excluyendo la validación inicial del
+baseline y el cierre del monitor), medidos con reloj monotónico. La duración total
+también se intenta registrar si el trabajo falla. Se mantienen MAE, WAPE, predicciones,
+modelo y ambas gráficas de evaluación dentro del mismo run.
+
+El contexto reutilizable está en `src/reposicion/system_metrics.py`. El baseline,
+que no ajusta un modelo, conserva su implementación. Esta preparación **no reentrenó**
+los modelos existentes ni agregó métricas retrospectivas a sus runs: las nuevas
+series temporales se comprobarán en el próximo entrenamiento autorizado.
