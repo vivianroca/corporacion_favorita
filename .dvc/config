@@ -1,0 +1,7 @@
+[core]
+    analytics = false
+    remote = storage
+[cache]
+    type = copy
+['remote "storage"']
+    url = ~/dvc-storage/corporacion_favorita

@@ -6,7 +6,11 @@ import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
+import yaml
+
 MAX_BYTES = 1024 * 1024
+DVC_ORIGINALS = {"train", "stores", "holidays_events", "oil", "transactions"}
+DVC_POINTERS = {f"data/original/{name}.csv.dvc" for name in DVC_ORIGINALS}
 FORBIDDEN_DIRS = {
     "data",
     "models",
@@ -75,17 +79,21 @@ def private_values(root):
     return values
 
 
-def validate_blob(path, content, *, mode="100644", secrets=()):
+def validate_blob(path, content, *, mode="100644", secrets=(), path_only=False):
     parts = PurePosixPath(path)
     if mode == "120000":
         raise AuditError(f"{path}: enlace simbólico no permitido en la publicación")
-    if set(parts.parts) & FORBIDDEN_DIRS:
+    dvc_metadata = path in DVC_POINTERS or path == "data/original/.gitignore"
+    if set(parts.parts) & FORBIDDEN_DIRS and not dvc_metadata:
         raise AuditError(f"{path}: directorio de datos, artefactos o secretos")
+    if path.startswith(".dvc/") and path not in {".dvc/config", ".dvc/.gitignore"}:
+        raise AuditError(f"{path}: caché, estado o configuración privada de DVC")
     name = parts.name.lower()
     if name != ".env.example" and (name == ".env" or name.startswith(".env.")):
         raise AuditError(f"{path}: archivo de entorno privado")
-    if {s.lower() for s in parts.suffixes} & FORBIDDEN_SUFFIXES or re.search(
-        r"\.(?:db|sqlite|sqlite3)-(?:wal|shm|journal)$", name
+    if path not in DVC_POINTERS and (
+        {s.lower() for s in parts.suffixes} & FORBIDDEN_SUFFIXES
+        or re.search(r"\.(?:db|sqlite|sqlite3)-(?:wal|shm|journal)$", name)
     ):
         raise AuditError(f"{path}: dato, modelo, base de datos o clave privada")
     if len(content) > MAX_BYTES:
@@ -94,6 +102,35 @@ def validate_blob(path, content, *, mode="100644", secrets=()):
         raise AuditError(f"{path}: coincide con un secreto del .env local")
     if any(pattern.search(content) for pattern in TOKEN_PATTERNS):
         raise AuditError(f"{path}: posible token o clave privada; no se muestra el valor")
+    if path in DVC_POINTERS and not path_only:
+        try:
+            document = yaml.safe_load(content)
+            if not isinstance(document, dict) or set(document) != {"outs"}:
+                raise ValueError("estructura")
+            if not isinstance(document["outs"], list) or len(document["outs"]) != 1:
+                raise ValueError("outputs")
+            out = document["outs"][0]
+            if not isinstance(out, dict) or not (
+                {"md5", "size", "path"} <= set(out) <= {"md5", "size", "path", "hash"}
+            ):
+                raise ValueError("campos")
+            if not (
+                re.fullmatch(r"[a-f0-9]{32}", out["md5"])
+                and type(out["size"]) is int
+                and out["size"] >= 0
+                and out.get("hash", "md5") == "md5"
+                and out["path"] == parts.name.removesuffix(".dvc")
+            ):
+                raise ValueError("contenido")
+        except (ValueError, TypeError, KeyError, yaml.YAMLError, UnicodeError) as error:
+            raise AuditError(f"{path}: puntero DVC inválido o contenido no permitido") from error
+    if path == "data/original/.gitignore" and content:
+        allowed = {f"/{name}.csv" for name in DVC_ORIGINALS | {"test", "sample_submission"}}
+        if any(
+            line.strip() and not line.lstrip().startswith("#") and line.strip() not in allowed
+            for line in content.decode().splitlines()
+        ):
+            raise AuditError(f"{path}: exclusión local no reconocida")
     if name == ".env.example":
         for line in content.decode().splitlines():
             key, separator, value = line.partition("=")
@@ -122,7 +159,9 @@ def audit(mode, refs=()):
                 continue
             path = raw.decode()
             actual = root / path
-            validate_blob(path, b"", mode="120000" if actual.is_symlink() else "100644")
+            validate_blob(
+                path, b"", mode="120000" if actual.is_symlink() else "100644", path_only=True
+            )
             if actual.stat().st_size > MAX_BYTES:
                 raise AuditError(f"{path}: excede el máximo de 1 MiB")
             content = actual.read_bytes()
@@ -153,7 +192,7 @@ def audit(mode, refs=()):
                 if (path, oid) in seen:
                     continue
                 seen.add((path, oid))
-                validate_blob(path, b"", mode=file_mode)
+                validate_blob(path, b"", mode=file_mode, path_only=True)
                 if int(git("cat-file", "-s", oid)) > MAX_BYTES:
                     raise AuditError(f"{path}: blob histórico excede 1 MiB")
                 content = git("cat-file", "blob", oid)
