@@ -1,0 +1,67 @@
+# Entorno y secretos
+.venv/
+.env
+.env.*
+!.env.example
+
+# Python y herramientas
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.egg-info/
+build/
+dist/
+
+# Datos y resultados: versionado futuro con DVC
+/data/
+/models/
+/forecasts/
+/orders/
+/reports/
+/manifests/
+/logs/
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
+
+# Archivos locales y editor
+.DS_Store
+.idea/
+.vscode/
+
+# Defensa adicional para datos, modelos y almacenamiento fuera de sus rutas previstas
+*.csv
+*.csv.gz
+*.tsv
+*.parquet
+*.arrow
+*.feather
+*.pkl
+*.pickle
+*.joblib
+*.onnx
+*.h5
+*.pt
+*.pth
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.duckdb
+**/volumes/
+**/pgdata/
+**/mlruns/
+**/mlartifacts/
+.aws/
+.ssh/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
