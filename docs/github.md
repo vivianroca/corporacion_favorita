@@ -82,4 +82,13 @@ El repositorio público y el PR #1 se crearon correctamente, y se confirmó la
 protección por API. GitHub registró opened/reopened, pero inicialmente no creó runs
 ni check suites. Se mantuvo el PR abierto y bloqueado y se añadió un disparo manual
 de diagnóstico. No se presenta la ausencia de un check como una CI aprobada.
-La ejecución en GitHub y cualquier bloqueo pendiente se informan al terminar.
+La actualización del workflow disparó correctamente `pull_request`. La
+[ejecución de referencia](https://github.com/vivianroca/corporacion_favorita/actions/runs/41177434432)
+aprobó auditoría, Ruff y **103 pruebas** en Ubuntu 24.04 con Python 3.12.15.
+La ejecución manual de diagnóstico también aprobó, pero no se usó para sustituir
+la comprobación automática del PR. El estado de Checks del último commit sigue
+siendo la autoridad antes del merge.
+
+La protección exige el check `pytest` de la aplicación GitHub Actions (app ID 15368),
+base actualizada y PR, con aplicación a administradores. El PR permanece abierto,
+sin auto-merge. DVC y el tag de entrega permanecen sin crear.

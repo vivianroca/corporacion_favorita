@@ -549,3 +549,18 @@ eventos opened/reopened del autor OWNER, pero inicialmente no aparecieron runs n
 checks. Se añadió workflow_dispatch para una prueba explícita, manteniendo todos
 los eventos automáticos de PR y el mismo job pytest. No se debilita la protección
 ni se interpreta la falta de CI como un resultado aprobado.
+
+## D040 — CI remota aprobada y protección confirmada
+
+La actualización del workflow disparó un run real pull_request:
+https://github.com/vivianroca/corporacion_favorita/actions/runs/41177434432.
+Su log confirma auditoría del historial, Ruff y 103 pruebas aprobadas en Ubuntu
+24.04/Python 3.12.15, validando el lock también en Linux x64. La prueba local usa
+Python 3.12.16 en ARM64. El diagnóstico manual también aprobó; el resultado de PR
+se verificó de forma independiente. El problema inicial de disparo quedó resuelto.
+
+Se vinculó el check requerido pytest a GitHub Actions (app ID 15368), con base
+actualizada y aplicación a administradores. La API confirmó PR abierto, checks
+SUCCESS y mergeStateStatus CLEAN, sin mergedAt ni autoMergeRequest. El usuario
+conserva la decisión de revisar y fusionar. No hay un bloqueo de configuración
+pendiente; DVC y entrega-lab1 siguen expresamente fuera de alcance.
