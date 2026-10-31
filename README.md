@@ -4,7 +4,7 @@ Producto propuesto para generar pronósticos y pedidos por tienda y familia con
 trazabilidad mediante Git, DVC y Airflow. Están implementadas la base y la
 **etapa 3: ingesta, validación y snapshots temporales con Airflow**. La infraestructura
 exclusiva de lab1 incluye PostgreSQL y MLflow. Se añadieron pronósticos por tienda/familia con evaluación temporal, seguimiento
-en MLflow y candidatos Random Forest e HistGradientBoosting.
+en MLflow y candidatos Random Forest, HistGradientBoosting y CatBoost.
 
 ## Estado actual
 
@@ -15,7 +15,7 @@ en MLflow y candidatos Random Forest e HistGradientBoosting.
 - Ingesta y versionado inicial de originales con DVC integrados en `main`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 149 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
+- pytest 9.2.0: 154 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -320,7 +320,7 @@ importancias, trazabilidad, lock y gráficas de reales frente a pronósticos y d
 de errores. Los doce artefactos se descargaron y verificaron por SHA-256.
 
 Las dependencias nuevas, `scikit-learn==1.9.1` y `matplotlib==3.11.2`, están instaladas
-en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 149 pruebas.
+en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 154 pruebas.
 [Detalles del diseño y disponibilidad temporal](docs/random_forest.md).
 No se asignó `champion`; la comparación de una semana no basta para promover un modelo.
 
@@ -416,7 +416,7 @@ locales están en `reports/walk_forward/january_2017/`, fuera de Git.
 
 [Fechas, métricas por ventana, agregados y enlaces a cada run](docs/walk_forward.md).
 No se elige Champion ni se agregan versiones de validación al Registry. Se conservan
-los runs anteriores y no se modifica Airflow ni DVC. La suite pasa 149 pruebas.
+los runs anteriores y no se modifica Airflow ni DVC. La suite pasa 154 pruebas.
 
 ## Variables temporales v2: calendario y escala por serie/familia
 
@@ -450,4 +450,37 @@ se modifica Registry, Airflow o DVC. No se añaden dependencias.
 
 [Diseño, supuestos, métricas por ventana y enlaces a runs](docs/variables_temporales_v2.md).
 Los cambios se diseñaron tras revisar estos cortes; confirmar generalización requiere
-otro período. La suite completa aprueba 149 pruebas.
+otro período. La suite completa aprueba 154 pruebas.
+
+## CatBoost: candidato inicial sin optimizar
+
+Se agregó `CatBoostRegressor` 1.2.10, instalado en `.venv` y bloqueado con hashes
+bajo Python 3.12. Usa los cuatro folds y las variables temporales corregidas v2,
+incluyendo la misma imputación por serie/familia y codificación que RF/HGB.
+La configuración inicial en `configs/catboost.yaml` fija 300 iteraciones,
+profundidad 6, learning_rate=0.05 y semilla 42, CPU con dos hilos de entrenamiento.
+No se entrega eval_set, se desactiva use_best_model y no hay búsqueda de parámetros.
+El pipeline incorpora un piso físico cero para las ventas pronosticadas.
+
+```bash
+.venv/bin/python -m reposicion.catboost_candidate \
+  --previous reports/walk_forward/temporal_v2_january_2017 \
+  --output reports/walk_forward/catboost_january_2017
+```
+
+| Horizonte | MAE CatBoost | WAPE CatBoost |
+|---|---:|---:|
+| 8–14 enero | 130,750 | 27,554 % |
+| 15–21 enero | 93,462 | 19,630 % |
+| 22–28 enero | 63,840 | 13,999 % |
+| 29 enero–4 febrero | 80,480 | 16,115 % |
+| Global, 49.896 registros | 92,133 | 19,335 % |
+
+[Experimento CatBoost en MLflow](http://localhost:5011/#/experiments/5): cuatro runs
+de fold y uno agregado, todos FINISHED. Se guardan parámetros explícitos/resueltos,
+pipeline completo, CBM nativo, métricas, predicciones, gráficas, System Metrics,
+importancias y trazabilidad. Se verificó la recuperación de todas las predicciones.
+
+[Diseño, comparación con RF/HGB v2 y enlaces por fold](docs/catboost.md).
+Se conservan los 33 runs anteriores, el baseline, Registry, Airflow y DVC. No se
+optimizaron hiperparámetros ni se asignó Champion. La suite aprueba 154 pruebas.

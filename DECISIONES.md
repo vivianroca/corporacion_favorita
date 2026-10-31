@@ -867,3 +867,52 @@ SHA-256 idénticos al descargarlos. Los ocho estimadores persistidos conservan s
 hiperparámetros v1. Se comprobó igualdad íntegra de los 18 runs anteriores y Registry,
 y hash idéntico del código baseline. Sus archivos forecast/evaluation coinciden
 byte a byte en los cuatro cortes. Auditoría de publicación aprobada.
+
+## D052 — CatBoost inicial con cuatro folds y variables temporales v2
+
+Se autoriza CatBoostRegressor sin optimización ni Champion. Se añade catboost 1.2.10
+con wheel cp312 macOS universal2, fijado en pyproject y requirements.lock generado
+bajo Python 3.12; se instala únicamente en .venv. Sus dependencias graphviz y plotly
+quedan bloqueadas; no se requiere ejecutar Graphviz ni instalar herramientas globales.
+La generación de hashes terminó correctamente tras descargar/resolver dependencias.
+
+Se conserva configs/walk_forward.yaml y la variante temporal v2: disponibilidad,
+calendario por alcance, indicadores de ausencia/cero/excepción y relleno por serie
+con respaldo exclusivo de la misma familia. La primera versión utiliza DictVectorizer
+igual a RF/HGB, sin introducir además codificación categórica nativa. Se exige igual
+huella de filas/etiquetas, trazabilidad, calendario, cortes y claves/reales evaluados.
+Los 98.010 ejemplos por fold y 49.896 registros evaluados coinciden con v2.
+
+Parámetros fijados antes de medir: 300 iteraciones, profundidad 6, learning_rate=0.05,
+RMSE con métrica MAE, semilla 42, CPU, dos hilos de ajuste, boosting_type Plain,
+has_time True, use_best_model False y allow_writing_files False. No hay eval_set,
+early stopping, búsqueda ni selección de iteración. Los defaults resueltos se guardan
+con get_all_params. Se mantienen las etiquetas fraccionarias; la predicción aplica
+piso cero fijo, guardado dentro del pipeline, sin elegir ese piso por validación.
+El CBM contiene el estimador crudo y requiere el preprocesamiento y ese piso.
+
+Se crean cinco runs nuevos en corporacion_favorita-catboost-temporal-v2, experimento 5,
+grupo f34f181e5d82463db7c2aba64ce572d9: cuatro folds y agregado micro/macro.
+MAE global=92.13316590687047, WAPE=0.19334628472750431 como fracción.
+Por fold MAE/WAPE: 130.75032781366866 / 0.2755390461206494;
+93.46232316370083 / 0.1963012306306949;
+63.84011581900496 / 0.13999281546031304;
+80.47989683110742 / 0.1611502476797976.
+Hay 9.473 predicciones crudas negativas en total; los pronósticos evaluados aplican
+el piso cero y la métrica registra sus cantidades por fold de forma transparente.
+
+Se guardan pipeline joblib, CBM, parámetros, importancias, predicciones, evaluación,
+lock, gráficos y trazabilidad; CPU/RAM y duración se registran en cada ajuste.
+Una verificación entre procesos detectó que la clase definida en la CLI se serializaba
+bajo __main__. Se movió a catboost_model.py, se agregó una prueba de regresión y se
+volvieron a guardar los estados ya ajustados, sin repetir entrenamientos ni alterar
+los CBM originales, métricas o predicciones. La corrección se marca en los cuatro
+runs propios y su lineage. No se modifican runs anteriores al inicio de esta tarea.
+
+Verificación final: cinco runs FINISHED, 300 árboles por fold y sin evaluación interna.
+Se recuperan las 49.896 predicciones desde joblib y CBM con preprocesamiento/piso,
+tolerancia 1e-12. Las medianas y columnas codificadas coinciden con RF v2. Se descargan
+59 artefactos con SHA-256 idénticos. Los 33 runs previos, versiones/aliases de Registry
+y código baseline conservan su estado. No se modifican Airflow, DVC ni originales.
+154 pruebas aprobadas; Ruff/formato y pip check correctos. Los resultados son de
+comparación de desarrollo sobre enero ya inspeccionado, no evaluación final inédita.
