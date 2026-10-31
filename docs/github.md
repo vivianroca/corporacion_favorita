@@ -47,6 +47,8 @@ cualquier secreto arbitrario. Nunca usar `git add -f` para datos o credenciales.
 
 `.github/workflows/ci.yml` se ejecuta al abrir, actualizar o reabrir un PR hacia
 `main`. El job se llama **`pytest`**, nombre estable para la protección de rama.
+Incluye además `workflow_dispatch` para diagnóstico manual sobre la rama feature;
+esto no sustituye el disparo automático de los PRs.
 
 El runner usa Ubuntu 24.04 y Python 3.12. Las acciones oficiales de checkout y setup
 están fijadas a commits completos, comprobados contra sus releases oficiales.
@@ -73,3 +75,11 @@ crear un bloqueo que requiera añadir colaboradores. El usuario revisa y decide 
 Después de cambiar la rama base o el código, se debe esperar de nuevo al resultado
 de Checks antes de fusionar. Cualquier ajuste futuro a esta protección debe ser
 explícito; no se desactiva para forzar un merge.
+
+## Verificación del primer PR
+
+El repositorio público y el PR #1 se crearon correctamente, y se confirmó la
+protección por API. GitHub registró opened/reopened, pero inicialmente no creó runs
+ni check suites. Se mantuvo el PR abierto y bloqueado y se añadió un disparo manual
+de diagnóstico. No se presenta la ausencia de un check como una CI aprobada.
+La ejecución en GitHub y cualquier bloqueo pendiente se informan al terminar.

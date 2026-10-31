@@ -540,3 +540,12 @@ La política de main requiere PR y check pytest actualizado, también para el ad
 No requiere aprobación de una segunda cuenta, para evitar un bloqueo de revisión
 propia en el laboratorio personal. No se inicializa DVC ni se crea entrega-lab1.
 La confirmación del resultado de CI y protección se informa tras verificar GitHub.
+
+## D039 — Diagnóstico del disparo de Actions
+
+El repositorio público y PR #1 se crearon, las ramas se publicaron y la protección
+de main se confirmó por API. Actions y el workflow figuran activos; se registraron
+eventos opened/reopened del autor OWNER, pero inicialmente no aparecieron runs ni
+checks. Se añadió workflow_dispatch para una prueba explícita, manteniendo todos
+los eventos automáticos de PR y el mismo job pytest. No se debilita la protección
+ni se interpreta la falta de CI como un resultado aprobado.
