@@ -71,7 +71,7 @@ def test_zero_actual_sales_do_not_fabricate_wape():
         wf.aggregate_metrics([[]])
 
 
-@pytest.mark.parametrize("temporal", [False])
+@pytest.mark.parametrize("temporal", [False, True])
 def test_synthetic_walk_forward_retrains_and_respects_revisions(
     synthetic, contracts, tmp_path, monkeypatch, temporal
 ):

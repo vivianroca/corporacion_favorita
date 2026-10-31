@@ -15,7 +15,7 @@ en MLflow y candidatos Random Forest e HistGradientBoosting.
 - Ingesta y versionado inicial de originales con DVC integrados en `main`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 142 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
+- pytest 9.2.0: 149 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -320,7 +320,7 @@ importancias, trazabilidad, lock y gráficas de reales frente a pronósticos y d
 de errores. Los doce artefactos se descargaron y verificaron por SHA-256.
 
 Las dependencias nuevas, `scikit-learn==1.9.1` y `matplotlib==3.11.2`, están instaladas
-en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 142 pruebas.
+en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 149 pruebas.
 [Detalles del diseño y disponibilidad temporal](docs/random_forest.md).
 No se asignó `champion`; la comparación de una semana no basta para promover un modelo.
 
@@ -416,4 +416,38 @@ locales están en `reports/walk_forward/january_2017/`, fuera de Git.
 
 [Fechas, métricas por ventana, agregados y enlaces a cada run](docs/walk_forward.md).
 No se elige Champion ni se agregan versiones de validación al Registry. Se conservan
-los runs anteriores y no se modifica Airflow ni DVC. La suite pasa 142 pruebas.
+los runs anteriores y no se modifica Airflow ni DVC. La suite pasa 149 pruebas.
+
+## Variables temporales v2: calendario y escala por serie/familia
+
+La nueva variante incorpora feriados conocidos al corte con alcance nacional,
+regional y local, fechas trasladadas, días de trabajo y eventos conocidos. Cada
+rezago distingue ausencia, cero observado y contexto excepcional. Agrega medianas
+de días de semana comparables y medias recientes sin eventos conocidos.
+
+La imputación usa historia comparable de la misma serie y estadísticas aprendidas
+solo en entrenamiento por tienda/familia, con respaldo exclusivo de la misma familia.
+No usa una mediana global ni rellena ceros observados. Los hiperparámetros, etiquetas,
+cuatro cortes y horizonte permanecen iguales. El baseline original se conserva y
+sus nuevos pronósticos/reales se comparan exactamente con los archivos anteriores.
+
+```bash
+.venv/bin/python -m reposicion.temporal_walk_forward \
+  --previous reports/walk_forward/january_2017 \
+  --output reports/walk_forward/temporal_v2_january_2017
+```
+
+| Modelo | MAE anterior | MAE v2 | WAPE anterior | WAPE v2 |
+|---|---:|---:|---:|---:|
+| Baseline semanal | 107,077 | 107,077 | 22,471 % | 22,471 % |
+| Random Forest | 112,485 | 90,563 | 23,606 % | 19,005 % |
+| HistGradientBoosting | 130,979 | 102,022 | 27,487 % | 21,410 % |
+
+[Experimento temporal v2 en MLflow](http://localhost:5011/#/experiments/4): quince runs
+nuevos, con métricas por ventana/agregadas, System Metrics, trazabilidad de calendario,
+modelos y gráficas. Se conservan los 18 runs anteriores. No se selecciona Champion ni
+se modifica Registry, Airflow o DVC. No se añaden dependencias.
+
+[Diseño, supuestos, métricas por ventana y enlaces a runs](docs/variables_temporales_v2.md).
+Los cambios se diseñaron tras revisar estos cortes; confirmar generalización requiere
+otro período. La suite completa aprueba 149 pruebas.

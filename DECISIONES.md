@@ -813,3 +813,57 @@ y duración en los ocho entrenamientos ML. Se descargaron 116 artefactos con SHA
 idénticos. Los tres runs previos y todas las versiones/aliases de Registry conservan
 su estado anterior. La auditoría de publicación pasa y Git confirma ausencia de
 cambios en DAGs, Docker, configuración DVC y punteros de originales.
+
+## D051 — Variables temporales v2, sin alterar baseline ni hiperparámetros
+
+Se autoriza incorporar calendario conocido e indicadores de rezagos excepcionales,
+y eliminar imputación global que mezcla familias. La extensión opcional del runner
+mantiene reproducible la ruta v1; la nueva entrada temporal_walk_forward usa un
+experimento independiente. No se toca el código del baseline ni los parámetros de
+RF/HGB, y no se amplía el entrenamiento ni se modifican cortes o evaluación.
+
+Se seleccionan por disponibilidad y revisión los recibos de holidays_events y stores
+para cada origen histórico y de pronóstico. National aplica a todas las tiendas;
+Regional al estado y Local a la ciudad. Se distinguen feriado activo, traslado,
+Work Day y Event. transferred=True conserva contexto excepcional pero no se marca
+feriado activo. No se infieren cierres reales de tienda ni se inventa conocimiento
+anticipado de eventos. El simulador entrega por fecha: cuando mezcla planificados e
+inesperados, se respeta la publicación conservadora de todo el recibo. Sin registro
+solo significa sin evento conocido, no certeza de día ordinario.
+
+Se mantienen rezagos observados y flags de ausencia; se agregan flags de cero real
+y contexto excepcional, mediana de rezagos semanales ordinarios y promedio reciente
+sin eventos conocidos con sus conteos. Las nuevas referencias usan exclusivamente
+ventas anteriores al origen y calendario conocido entonces. Los ceros no se borran.
+
+SeriesFamilyImputer sustituye SimpleImputer global únicamente en v2. Primero usa
+rezagos comparables conocidos de la misma serie para rellenar un rezago ausente;
+luego medianas de columna por serie/familia ajustadas en entrenamiento; después
+respaldo de la misma familia. Si no hay historia válida, aborta. Nunca mezcla familias,
+no ajusta estadísticas con validación y excluye rezagos excepcionales de las medianas
+de relleno. Los flags originales de ausencia se conservan después de imputar.
+
+Pruebas: alcance territorial, traslado, eventos aún no publicados, ceros/ausencias,
+escalas de familias, igualdad exacta de hiperparámetros y recorridos completos v1/v2.
+149 pruebas aprobadas y Ruff/formato correctos. No se añaden dependencias.
+
+Resultado real: grupo 38f20499009a405da5231d65382aed8d, experimento MLflow 4,
+corporacion_favorita-walk-forward-temporal-v2. Sobre 49.896 registros por modelo:
+baseline MAE=107.0769410822611, WAPE=0.22470658133215438;
+RF v2 MAE=90.5625721282446, WAPE=0.19005031124255538;
+HGB v2 MAE=102.02235699583552, WAPE=0.21409927131155868.
+Los tres modelos mantienen las mismas cuatro ventanas y las 98.010 etiquetas por
+ajuste ML. El baseline reproduce exactamente sus predicciones y reales anteriores.
+
+Se publican runs y artefactos nuevos, sin sobrescribir v1 ni crear aliases o versiones
+de Registry para validación. No se selecciona Champion. Los resultados corresponden
+al paquete de nuevas variables e imputación, no a una ablación de efectos individuales.
+Como enero se inspeccionó para diseñar las variables, la comparación es de desarrollo;
+queda pendiente un período independiente para estimar generalización sin selección.
+
+Verificación posterior: 15 runs nuevos FINISHED, System Metrics en los ocho ajustes,
+72 contextos de calendario sin recibos posteriores al corte, 116 artefactos con
+SHA-256 idénticos al descargarlos. Los ocho estimadores persistidos conservan sus
+hiperparámetros v1. Se comprobó igualdad íntegra de los 18 runs anteriores y Registry,
+y hash idéntico del código baseline. Sus archivos forecast/evaluation coinciden
+byte a byte en los cuatro cortes. Auditoría de publicación aprobada.
