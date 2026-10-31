@@ -11,10 +11,10 @@ exclusiva de lab1 incluye PostgreSQL y MLflow. No se entrenan modelos.
 - Python 3.12.16 disponible en `/opt/homebrew/bin/python3.12`; `.venv` local creado y verificado en ARM64.
 - `lab1/.venv` es el único entorno oficial del laboratorio.
 - Repositorio público: [corporacion_favorita](https://github.com/vivianroca/corporacion_favorita).
-- Implementación en `feature/ingesta-airflow`, preparada para revisión mediante PR a `main`.
+- Ingesta integrada en main; versionado inicial de datos preparado en `feature/dvc`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 103 pruebas sintéticas aprobadas, más integración real con el scheduler.
+- pytest 9.2.0: 120 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -124,6 +124,28 @@ volúmenes: `make infra-down`. No usar `down -v` para una parada normal.
 Guía y comandos del DAG: [etapa3_operacion.md](docs/etapa3_operacion.md).
 Contenedores, ejecuciones, snapshots y verificaciones: [etapa3_resultados.md](docs/etapa3_resultados.md).
 
+## Datos originales con DVC
+
+DVC **3.67.1** está fijado en las dependencias de desarrollo y en el lock. Solo se
+versionan `train.csv`, `stores.csv`, `holidays_events.csv`, `oil.csv` y
+`transactions.csv`: **123.397.286 bytes**. Los CSV siguen fuera de Git; se guardan
+sus cinco punteros `.csv.dvc`. `test.csv` y `sample_submission.csv` no se versionan.
+
+```sh
+.venv/bin/dvc status
+.venv/bin/dvc push -r storage
+.venv/bin/dvc pull -r storage
+.venv/bin/python scripts/verificar_recuperacion_dvc.py
+```
+
+El remoto local `storage` está en `~/dvc-storage/corporacion_favorita`. Se verificaron
+push de cinco objetos y recuperación en un clon con caché vacía, sin borrar ni
+modificar originales o caché principal. El remoto local no es accesible desde otras
+máquinas; se propone S3 para compartir con el docente, pendiente de configurar.
+
+La simulación completa y los snapshots no se agregaron aún a DVC. Medición, estrategia,
+comandos y cuidados de caché: [dvc.md](docs/dvc.md).
+
 ## Contratos y simulación del origen
 
 Con los cinco originales en `data/original/`, ejecutar:
@@ -210,11 +232,12 @@ Este diagnóstico no implementa el sistema de ingesta ni los contratos futuros.
 Los contratos y políticas del origen se cargan y validan en esta etapa.
 Los parámetros `null` de pronóstico y costos siguen pendientes y no se usan en el simulador.
 
-Datos, modelos, pronósticos, resultados y secretos se excluyen de Git. DVC y su
-remoto se prepararán posteriormente. Ningún recurso del proyecto de bicicletas se reutiliza.
+Datos, modelos, pronósticos, resultados y secretos se excluyen de Git. DVC guarda
+los cinco originales en el remoto local; los demás artefactos y el remoto externo
+se prepararán posteriormente. Ningún recurso del proyecto de bicicletas se reutiliza.
 
 ## Fuera del alcance actual
 
 No se modifican los originales ni se regeneran las entregas existentes. No se
 entrenan modelos ni se registran experimentos ficticios. La siguiente etapa requiere
-autorización. DVC remoto, CI y el producto de pronóstico se implementarán en su alcance.
+autorización. El remoto DVC externo y el producto de pronóstico se implementarán en su alcance.

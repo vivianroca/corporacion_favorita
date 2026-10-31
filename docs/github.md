@@ -13,13 +13,16 @@ incluye contratos, simulación, ingesta, snapshots, automatismo, infraestructura
 pruebas ya verificadas. No se hace merge automáticamente.
 
 Los commits usan identidad noreply de GitHub configurada solo en este repositorio;
-no se cambia la configuración global. No se inicializa DVC ni se crea `entrega-lab1`.
+no se cambia la configuración global. El versionado inicial DVC se prepara en
+`feature/dvc`; no se crea `entrega-lab1`.
 
 ## Qué se publica
 
 Código Python, DAG, configuraciones sin secretos, Compose/Dockerfile, scripts,
 pruebas sintéticas, documentación, lock de dependencias y el enunciado PDF pequeño.
 Los informes Markdown contienen agregados y checksums de integridad, no datasets.
+DVC agrega exclusivamente cinco punteros `.csv.dvc` de originales y configuración
+compartida sin credenciales. La caché y `.dvc/config.local` permanecen fuera de Git.
 
 Se excluyen datos originales, simulaciones, bandeja operativa, resultados, modelos,
 entornos, `.env`, bases de datos, claves privadas y volúmenes. `.env.example`
@@ -91,4 +94,5 @@ siendo la autoridad antes del merge.
 
 La protección exige el check `pytest` de la aplicación GitHub Actions (app ID 15368),
 base actualizada y PR, con aplicación a administradores. El PR permanece abierto,
-sin auto-merge. DVC y el tag de entrega permanecen sin crear.
+sin auto-merge. Esa primera revisión precedió a DVC; su configuración posterior
+se documenta en [dvc.md](dvc.md). El tag de entrega permanece sin crear.

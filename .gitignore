@@ -16,8 +16,17 @@ coverage.xml
 build/
 dist/
 
-# Datos y resultados: versionado futuro con DVC
-/data/
+# Datos fuera de Git; únicamente los cinco punteros DVC y su exclusión local
+/data/?*
+/data/original/?*
+!/data/
+!/data/original/
+!/data/original/.gitignore
+!/data/original/train.csv.dvc
+!/data/original/stores.csv.dvc
+!/data/original/holidays_events.csv.dvc
+!/data/original/oil.csv.dvc
+!/data/original/transactions.csv.dvc
 /models/
 /forecasts/
 /orders/

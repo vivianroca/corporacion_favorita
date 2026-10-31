@@ -564,3 +564,61 @@ actualizada y aplicación a administradores. La API confirmó PR abierto, checks
 SUCCESS y mergeStateStatus CLEAN, sin mergedAt ni autoMergeRequest. El usuario
 conserva la decisión de revisar y fusionar. No hay un bloqueo de configuración
 pendiente; DVC y entrega-lab1 siguen expresamente fuera de alcance.
+
+## D041 — Rama DVC y dependencia fija
+
+El usuario autoriza inicializar DVC, cinco originales y storage local. Git estaba
+limpio en feature/ingesta-airflow. Se confirmó que el usuario ya había fusionado
+el PR #1; se actualizó main por fast-forward y se creó feature/dvc desde ese estado.
+No se realizó un merge de PR durante esta tarea. DVC no estaba instalado.
+
+Se fijó DVC 3.67.1 en el extra dev de pyproject.toml y se regeneró el lock con hashes
+bajo Python 3.12.16. Se instaló exclusivamente en lab1/.venv. El backend local no
+requiere plugins cloud; no se instaló todavía dvc-s3.
+
+## D042 — Inicialización Git y cachés separadas
+
+Se usó dvc init con SCM Git, nunca --no-scm. Un primer intento falló por acceso a
+la caché global de índices de Homebrew; se conservó el estado parcial en un respaldo
+temporal y se completó init. Se fijó una caché de índices del workspace mediante
+config.local, ignorado por Git. La caché de datos permanece en .dvc/cache y tampoco
+se publica. La configuración compartida usa cache.type copy y analítica deshabilitada.
+
+## D043 — Originales inmutables y excepciones limitadas de Git
+
+Se agregaron con --no-relink únicamente train, stores, holidays_events, oil y
+transactions. Suman 123.397.286 bytes. No se agregaron test ni sample_submission,
+simulación o snapshots. Los cinco SHA-256 y mtime originales permanecen iguales.
+
+Se revisaron .gitignore y los cinco punteros: Git solo admite esos metadatos bajo
+data/original. Los padres deben ser transitables para que DVC descubra las etapas;
+los comodines ?* evitan marcar como ignorado el padre con barra final. Se añadió
+una prueba de regresión para ese recorrido y la exclusión de datos. La auditoría
+valida YAML, MD5, tamaño y ruta de cada puntero; no acepta CSV renombrados ni otros
+punteros de datos o configuración privada. La suite completa aprueba 120 casos.
+
+## D044 — Remoto dedicado, push y recuperación real
+
+Se configuró storage por defecto en ~/dvc-storage/corporacion_favorita, con tilde
+portable en la configuración versionada. No se reutilizó almacenamiento de otro
+proyecto. El push creó cinco objetos; MD5 y tamaños se comprobaron en el destino.
+El estado cloud confirma sincronización.
+
+El script verificar_recuperacion_dvc.py clonó el commit e0c6341 localmente sin datos
+ni caché, ejecutó pull y recuperó cinco CSV idénticos por SHA-256. Originales y caché
+principal conservaron contenido y mtime. El clon y su caché se dejaron disponibles
+para inspección; no se eliminaron archivos para simular el fallo o la recuperación.
+
+## D045 — Estrategia posterior y acceso docente
+
+Se inventariaron 10.143 archivos/138.307.715 bytes únicos en la simulación; el hashing
+local tardó 1,489 s, sin ejecutar dvc add sobre ella. No es un benchmark de DVC o nube.
+Se propone un piloto por partición y punteros de directorio/generación inmutables,
+no miles de sidecars ni un ZIP monolítico. Los snapshots cerrados sí muestran
+contenidos repetidos y pueden aprovechar deduplicación. No se versionan bases vivas.
+
+storage es un respaldo en esta máquina, no un remoto compartido con docentes.
+Se recomienda S3/compatible con prefijo exclusivo y acceso docente de lectura;
+el endpoint, plugin fijado y credenciales quedan pendientes de elección/autorización.
+La documentación detallada está en docs/dvc.md. No se modifican DAGs ni se entrenan
+modelos; no se fusionará el PR ni se creará entrega-lab1.
