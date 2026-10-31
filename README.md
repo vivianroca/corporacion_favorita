@@ -15,7 +15,7 @@ en MLflow y candidatos Random Forest e HistGradientBoosting.
 - Ingesta y versionado inicial de originales con DVC integrados en `main`.
 - Docker CLI y Engine 29.9.2 accesibles; Compose v5.6.0 disponible. Imágenes oficiales previstas verificadas en linux/arm64.
 - Dependencias instaladas y bloqueadas con hashes en `requirements.lock` para Python 3.12/macOS ARM64.
-- pytest 9.2.0: 137 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
+- pytest 9.2.0: 142 pruebas aprobadas, más integración real con el scheduler y recuperación aislada DVC.
 - `pip check` sin incompatibilidades; instalación editable del proyecto completada.
 
 ## Requisitos y preparación del entorno
@@ -320,7 +320,7 @@ importancias, trazabilidad, lock y gráficas de reales frente a pronósticos y d
 de errores. Los doce artefactos se descargaron y verificaron por SHA-256.
 
 Las dependencias nuevas, `scikit-learn==1.9.1` y `matplotlib==3.11.2`, están instaladas
-en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 137 pruebas.
+en `.venv` y bloqueadas con hashes bajo Python 3.12. La suite completa pasa 142 pruebas.
 [Detalles del diseño y disponibilidad temporal](docs/random_forest.md).
 No se asignó `champion`; la comparación de una semana no basta para promover un modelo.
 
@@ -382,3 +382,38 @@ Model Registry contiene `corporacion_favorita_hist_gradient_boosting`, versión 
 El candidato mejora al baseline; Random Forest conserva el menor error en esta
 semana. No se asigna `champion`. Los modelos anteriores no se reentrenaron y sus runs
 permanecen intactos. [Diseño, comandos y verificación](docs/hist_gradient_boosting.md).
+
+## Walk-forward: cuatro ventanas semanales
+
+La validación temporal ahora también se ejecuta sobre los cortes **8, 15, 22 y 29 de
+enero de 2017**, con horizonte de siete días. El último termina el 4 de febrero.
+Random Forest e HistGradientBoosting se reentrenan en cada corte con ocho semanas
+móviles y las revisiones conocidas entonces; el baseline utiliza la semana previa.
+Los tres modelos evalúan exactamente las mismas claves y reales por ventana.
+
+```bash
+.venv/bin/python -m reposicion.walk_forward \
+  --config configs/walk_forward.yaml \
+  --output reports/walk_forward/january_2017 \
+  --tracking-uri http://localhost:5011
+```
+
+Hay 12.474 observaciones por ventana y **49.896 por modelo**. El agregado micro usa
+la suma de errores de todas las ventanas y la suma de ventas, sin promediar los WAPE.
+También se registran medias y desviaciones estándar por ventana.
+
+| Modelo | MAE global | WAPE global |
+|---|---:|---:|
+| Baseline semanal | 107,077 | 22,471 % |
+| Random Forest | 112,485 | 23,606 % |
+| HistGradientBoosting | 130,979 | 27,487 % |
+
+[Experimento walk-forward en MLflow](http://localhost:5011/#/experiments/3): **15 runs
+FINISHED**, doce de ventana y tres agregados, enlazados por
+`walk_forward_id=107d7f6f8961472b8fdf46647ed4f224`. Los ajustes ML mantienen System
+Metrics, duración, predicciones, pipeline, trazabilidad y gráficas. Los resultados
+locales están en `reports/walk_forward/january_2017/`, fuera de Git.
+
+[Fechas, métricas por ventana, agregados y enlaces a cada run](docs/walk_forward.md).
+No se elige Champion ni se agregan versiones de validación al Registry. Se conservan
+los runs anteriores y no se modifica Airflow ni DVC. La suite pasa 142 pruebas.

@@ -761,3 +761,55 @@ Verificación posterior: la versión 1 recuperada desde Registry reproduce las
 12.474 predicciones por sklearn y pyfunc (tolerancia 1e-12). Los doce artefactos
 del run conservan SHA-256 idénticos al descargarlos. Los dos runs anteriores
 conservan íntegramente estado, parámetros, métricas, tags y metadatos.
+
+## D050 — Walk-forward real de cuatro cortes, sin selección de Champion
+
+Se autoriza reentrenar los candidatos ML por corte para validación, ampliando la
+restricción anterior de no reentrenamiento. Se crean resultados y runs nuevos sin
+sobrescribir los históricos. Configuración externa en configs/walk_forward.yaml;
+lógica independiente en src/reposicion/walk_forward.py, sin modificar Airflow o DVC.
+
+Se eligen los domingos 8, 15, 22 y 29 de enero de 2017 a las 12Z, para mantener el
+origen previo y cuatro cortes semanales de enero; el último horizonte termina el
+4 de febrero. Los cuatro tienen la historia semanal disponible que exige el baseline.
+No se omiten ventanas ni se imputan ceros para lograr comparación. Se conserva un
+universo de 1.782 series, 12.474 filas por ventana y 49.896 por modelo.
+
+Se usa ventana móvil (rolling), no expansiva: ocho semanas de etiquetas conocidas
+al corte, como en los candidatos anteriores. Los inicios ML son 2016-11-13,
+2016-11-20, 2016-11-27 y 2016-12-04; fines 2017-01-07, 14, 21 y 28. Cada corte
+mantiene 98.010 etiquetas, excluyendo 1.782 inexistentes del 25 de diciembre.
+Se reconstruyen variables con revisiones disponibles en cada origen histórico.
+Ambos candidatos comparten filas y etiquetas, verificables por SHA-256; se ajustan
+ocho pipelines nuevos sin warm start ni búsqueda de hiperparámetros. El baseline
+no ajusta parámetros y utiliza solo la última semana conocida.
+
+La verdad de evaluación se consulta con desfase fijo de 33 días desde cada emisión:
+10, 17 y 24 de febrero y 3 de marzo a las 12Z. Es una elección de evaluación para
+conservar la maduración del primer experimento, no un SLA inferido de los CSV.
+Los reales se leen después de predecir para cada modelo y nunca entran al ajuste.
+La igualdad de fechas/claves/reales se exige para los tres modelos por ventana.
+
+El agregado MAE usa error total dividido por número de filas; WAPE usa error total
+dividido por ventas totales, no media de WAPE. Se publican además media y desvío
+poblacional de cada métrica por ventana. Un WAPE indefinido no se sustituye por cero.
+La prueba sintética comprueba ocho instancias nuevas, cortes de disponibilidad,
+igualdad de muestras, ventanas semanales, agregación ponderada y ceros/duplicados.
+
+Ejecución real 107d7f6f8961472b8fdf46647ed4f224, experimento MLflow 3:
+12 runs modelo/ventana y tres agregados, todos FINISHED. MAE/WAPE globales:
+baseline 107.0769410822611 / 0.22470658133215438;
+Random Forest 112.48541399213852 / 0.23605654562439596;
+HistGradientBoosting 130.97906021517966 / 0.2748664329553512.
+Las fracciones WAPE se muestran como porcentajes en README y docs/walk_forward.md.
+
+Cada run de ventana guarda predicciones, evaluación, gráficos y trazabilidad; los
+ML además su pipeline, métricas de duración y System Metrics del host. No se generan
+versiones de Registry para estos ajustes de validación ni se promueve un candidato.
+La suite completa aprueba 142 pruebas y Ruff/formato. No cambian dependencias.
+
+Verificación final: 15 runs FINISHED, métricas idénticas a archivos locales, CPU/RAM
+y duración en los ocho entrenamientos ML. Se descargaron 116 artefactos con SHA-256
+idénticos. Los tres runs previos y todas las versiones/aliases de Registry conservan
+su estado anterior. La auditoría de publicación pasa y Git confirma ausencia de
+cambios en DAGs, Docker, configuración DVC y punteros de originales.
