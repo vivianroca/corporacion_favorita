@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=75,<83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lab1-reposicion"
+version = "0.1.0"
+description = "Laboratorio de reproducibilidad y orquestación de un motor de reposición"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = ["PyYAML>=6.0.2,<7"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<10",
+    "ruff>=0.9,<1",
+    "pip-tools==7.6.2",
+    "setuptools>=75,<83",
+]
+
+[project.scripts]
+reposicion = "reposicion.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
+
+[tool.pytest.ini_options]
+minversion = "8.3"
+testpaths = ["tests"]
+addopts = "-ra --strict-config --strict-markers"
+markers = [
+    "integration: comprobaciones entre componentes",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.pip-tools.compile]
+generate-hashes = true
+allow-unsafe = true

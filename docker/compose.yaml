@@ -1,0 +1,153 @@
+name: lab1
+
+x-airflow: &airflow
+  image: lab1-airflow:3.3.2
+  pull_policy: never
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.airflow
+  restart: unless-stopped
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://lab1:${LAB1_POSTGRES_PASSWORD:?Ejecutar scripts/preparar_infra.py}@postgres:5432/lab1_airflow
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/auth/passwords.json
+    AIRFLOW__CORE__FERNET_KEY: ${LAB1_FERNET_KEY:?Falta clave Fernet}
+    AIRFLOW__API__SECRET_KEY: ${LAB1_API_SECRET:?Falta secreto API}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${LAB1_JWT_SECRET:?Falta secreto JWT}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api:8080/execution/
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__PARALLELISM: '2'
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '1'
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: '10'
+    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+    PYTHONPATH: /opt/lab1/src
+    LAB1_PIPELINE_CONFIG: /opt/lab1/configs/pipeline.yaml
+    LAB1_SOURCE_ROOT: /opt/lab1/source
+    LAB1_WORK_ROOT: /opt/lab1/operational
+    LAB1_CONTRACTS: /opt/lab1/configs/contracts.yaml
+    LAB1_OPERATIONAL_INBOX: /opt/lab1/inbox
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+  volumes:
+    - type: bind
+      source: ../data/simulation
+      target: /opt/lab1/source
+      read_only: true
+      bind:
+        create_host_path: false
+    - operational:/opt/lab1/operational
+    - type: bind
+      source: ../data/operational_inbox
+      target: /opt/lab1/inbox
+      read_only: true
+      bind:
+        create_host_path: false
+    - airflow_logs:/opt/airflow/logs
+    - airflow_auth:/opt/airflow/auth
+  networks: [internal]
+  depends_on:
+    postgres: {condition: service_healthy}
+    airflow-init: {condition: service_completed_successfully}
+
+services:
+  postgres:
+    image: postgres:16
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lab1
+      POSTGRES_DB: lab1_airflow
+      POSTGRES_PASSWORD: ${LAB1_POSTGRES_PASSWORD:?Falta contraseña PostgreSQL}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [internal]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U lab1 -d lab1_airflow']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.17.2
+    pull_policy: never
+    restart: unless-stopped
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --workers=1
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --serve-artifacts
+      - --artifacts-destination=/artifacts
+      - --allowed-hosts=localhost:*,127.0.0.1:*,mlflow:*,lab1-mlflow:*
+    ports: ['127.0.0.1:${LAB1_MLFLOW_PORT:-5011}:5000']
+    volumes:
+      - mlflow_db:/mlflow
+      - mlflow_artifacts:/artifacts
+    networks: [internal]
+    healthcheck:
+      test: [CMD, python, -c, "from urllib.request import urlopen; assert urlopen('http://localhost:5000/health',timeout=5).status==200"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  airflow-init:
+    <<: *airflow
+    restart: 'no'
+    command: [python, /opt/lab1/init_airflow.py]
+    environment:
+      <<: *airflow-env
+      LAB1_AIRFLOW_ADMIN_PASSWORD: ${LAB1_AIRFLOW_ADMIN_PASSWORD:?Falta contraseña de Airflow}
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  airflow-api:
+    <<: *airflow
+    command: api-server
+    ports: ['127.0.0.1:${LAB1_AIRFLOW_PORT:-8082}:8080']
+    healthcheck:
+      test: [CMD, python, -c, "from urllib.request import urlopen; assert urlopen('http://localhost:8080/api/v2/monitor/health',timeout=5).status==200"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  airflow-scheduler:
+    <<: *airflow
+    command: scheduler
+    depends_on:
+      postgres: {condition: service_healthy}
+      airflow-init: {condition: service_completed_successfully}
+      airflow-api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "from urllib.request import urlopen; assert urlopen('http://localhost:8974/health',timeout=5).status==200"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: dag-processor
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+
+networks:
+  internal:
+    name: lab1_internal
+
+volumes:
+  postgres_data: {name: lab1_postgres_data}
+  mlflow_db: {name: lab1_mlflow_db}
+  mlflow_artifacts: {name: lab1_mlflow_artifacts}
+  operational: {name: lab1_operational}
+  airflow_logs: {name: lab1_airflow_logs}
+  airflow_auth: {name: lab1_airflow_auth}

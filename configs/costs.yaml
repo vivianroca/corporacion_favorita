@@ -1,0 +1,8 @@
+schema_version: 1
+status: draft
+# No son costos cero: null significa que falta una decisión de negocio.
+shortage_cost_per_unit: null
+excess_cost_per_unit: null
+lead_time_days: null
+inventory_policy: null
+# Una implementación futura deberá rechazar costos sin definir.

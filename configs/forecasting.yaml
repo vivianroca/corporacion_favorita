@@ -1,0 +1,11 @@
+schema_version: 1
+status: draft
+publication_frequency: weekly
+forecast_granularity: daily
+series_keys:
+  - store_nbr
+  - family
+# Pendientes de justificación y autorización de la etapa de modelado.
+horizon_days: null
+quantiles: null
+random_seed: 42

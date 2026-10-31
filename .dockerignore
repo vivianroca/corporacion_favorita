@@ -1,0 +1,11 @@
+*
+!src/
+!src/reposicion/
+!src/reposicion/*.py
+!configs/
+!configs/*.yaml
+!dags/
+!dags/*.py
+!docker/
+!docker/Dockerfile.airflow
+!docker/init_airflow.py

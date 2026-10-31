@@ -1,0 +1,7 @@
+schema_version: 1
+source_root: data/simulation
+work_root: data/operational
+contracts: configs/contracts.yaml
+operational_inbox: data/operational_inbox
+# En Docker se sobreescriben rutas con variables LAB1_SOURCE_ROOT y LAB1_WORK_ROOT.
+# Ventanas de referencia opcionales son pruebas acotadas, no un histórico completo.
