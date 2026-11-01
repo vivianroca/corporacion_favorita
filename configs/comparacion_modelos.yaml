@@ -1,0 +1,24 @@
+schema_version: 1
+experiment_name: comparacion_modelos
+forecast_starts: ['2017-01-08', '2017-01-15', '2017-01-22', '2017-01-29']
+models:
+  baseline_semanal:
+    label: Baseline semanal
+    experiment: corporacion_favorita-walk-forward-temporal-v2
+    group: 38f20499009a405da5231d65382aed8d
+    source_model: baseline_semanal
+  random_forest:
+    label: Random Forest
+    experiment: corporacion_favorita-walk-forward-temporal-v2
+    group: 38f20499009a405da5231d65382aed8d
+    source_model: random_forest
+  hist_gradient_boosting:
+    label: HistGradientBoosting
+    experiment: corporacion_favorita-walk-forward-temporal-v2
+    group: 38f20499009a405da5231d65382aed8d
+    source_model: hist_gradient_boosting
+  catboost:
+    label: CatBoost
+    experiment: corporacion_favorita-catboost-temporal-v2
+    group: f34f181e5d82463db7c2aba64ce572d9
+    source_model: CatBoostRegressor
