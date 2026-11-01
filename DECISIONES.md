@@ -1517,3 +1517,133 @@ modelos sintéticos locales; no se ejecutan entrenamientos del laboratorio ni
 se alteran sus modelos o runs existentes. Cada commit se prepara con rutas
 explícitas y auditoría del índice. Datos y artefactos permanecen fuera de Git;
 solo se incorpora el puntero DVC autorizado de la entrega.
+
+
+### D069 — Restauración del Champion y residuos en MLflow vacío (2026-11-01)
+
+Se implementa reposicion.champion_restore, con export/verify/restore. El paquete
+models/champion_restore contiene siete archivos (4.024.988 bytes): los cuatro
+evaluation.csv originales de RF temporal v2, metadatos de parámetros/métricas y
+linaje, probe del modelo original y manifiesto SHA-256. Referencia el peso del
+fold 4 en models/current y su puntero por SHA-256, sin duplicar pesos ni entrenar.
+El paquete se versiona por models/champion_restore.dvc (MD5 de directorio
+b4b67d267efc7d97bd7dff86c7e363c3.dir). Se amplían solo su excepción gitignore y
+validación estricta del auditor (ruta fija, siete archivos, checksum .dir).
+
+El servidor destino recibe nuevos IDs de runs/versiones, nunca IDs falsificados:
+cuatro runs restoration_only y una versión fuente 4 restaurada como versión 1.
+Se preservan los IDs originales, tags DVC/Git, fechas históricas y MAE/WAPE; no
+se copian System Metrics como si fueran un entrenamiento nuevo. La calibración
+sigue siendo evaluation.csv en cada run y conserva los filtros temporales del
+consumidor existente. No se modifica uncertainty ni ningún DAG.
+
+Se valida el paquete antes de escribir/deserializar; el pipeline publicado se
+comprueba por hash y probe. El alias se asigna al completar verificaciones. Un
+Registry con versiones ajenas se rechaza sin sobrescribir su Champion. Identidad
+de paquete, búsqueda de runs fuente y checkpoint de modelo permiten reintentar
+interrupciones sin duplicar runs/versiones; corrupción publicada se rechaza.
+Lock por URI en el mismo host, no exclusión distribuida entre máquinas.
+
+DVC push a google_drive para ambos punteros agregó ocho objetos nuevos: siete
+archivos e índice, con pesos ya disponibles; estado cloud {}. En MLflow temporal
+aislado (imagen oficial existente 3.17.2, sin volúmenes fuente) restore repetido
+conservó 4 runs/1 versión y Champion. uncertainty.run produjo 12.474 pronósticos
+para 2017-03-05: punto/P10/P50/P90 idénticos a data/entrega, diferencia máxima 0.0,
+orden/no negatividad comprobados. El MLflow original mantuvo sus 51 runs y alias
+v4. Evidencia local en reports/champion_restore/verification.json.
+
+65 pruebas de restauración, cuantiles y auditoría pasan sin fit; Ruff pasa.
+No se hacen staging, commit, push o merge Git. README y guía específica registran
+el procedimiento y la dependencia de permisos/autenticación del docente. Esto
+resuelve restauración del modelo/calibración, no el bootstrap total del producto.
+
+
+### D070 — Bootstrap reproducible desde CSV y DVC por escenario (2026-11-01)
+
+Se incorpora sh scripts/bootstrap.sh --origin YYYY-MM-DD. Prepara/verifica .venv
+Python 3.12 y lock, recupera pesos/calibración de google_drive y ejecuta el módulo
+reposicion.bootstrap. Python/Docker activos y autorización externa de Google Drive
+son prerrequisitos; no se fabrican ni publican credenciales de la cuenta docente.
+
+Cada instancia lab1-<nombre> tiene simulación/bandeja/snapshots/políticas/secretos
+en data/bootstrap/<nombre>, todos ignorados, y red/volúmenes propios. Se genera
+Compose a partir del existente sin reutilizar sus volúmenes ni imágenes locales
+custom. Dockerfile.bootstrap parte directamente de la imagen oficial Airflow 3.3.2
+y crea el entorno de inferencia bloqueado. Solo se descargan imágenes ausentes.
+El MLflow vacío recibe el Champion y residuos por la restauración D069; el
+inicializador de Airflow crea el catálogo de seguimiento vacío automáticamente.
+
+El histórico se prepara completo desde CSV con source_simulator y se ingiere
+al corte configurado (2.594.592 filas de train). La bandeja operativa recibe
+solo tiendas y novedades posteriores al corte inicial, incluyendo los ancestros
+históricos indispensables de sus correcciones. Se preservan available_at y
+revisiones; solo release escribe en la bandeja. Un sondeo periódico no debe
+republicar toda la carga inicial como novedades. El timestamp físico de activación
+del cron se persiste al crear la instancia para evitar una carga atrasada durante
+el arranque; no se utiliza como fecha de datos. El sondeo usa el corte de negocio
+explícito de la instancia, no 2026.
+
+DAG 1 confirma snapshot y, solo bajo conf.forecast_request explícito, el Asset
+lab1.pronostico_solicitado. DAG 2 usa AssetOrTimeSchedule: cron semanal más esas
+solicitudes, nunca cambios genéricos de snapshot cada tres horas. Resuelve el
+corte/versión/snapshot de la solicitud y conserva su sensor de 28 días y la
+confirmación conjunta de pedidos. Se permite descubrimiento de snapshot en la
+política de bootstrap; el ID derivado por ingesta se fija automáticamente después
+en la configuración generada, sin requerirlo al usuario ni seleccionar un snapshot
+futuro. DAG 3 conserva pronósticos OR ventas y su lógica no cambia.
+
+Se conserva el código de modelos, contratos, ingesta, pedidos, incertidumbre y
+seguimiento. Los cortes se validan contra las fechas reales de train, disponibilidad
+del modelo y recibos, sin rellenar datos tardíos con futuros. Una instancia se
+fija a su escenario; se exige otra instancia/puertos para un corte distinto.
+Generaciones y DAG Runs manuales tienen identidades deterministas. Locks,
+restauración y publicadores existentes evitan duplicados; se esperan también
+DAG Runs exitosos de los consumidores nativos antes de declarar éxito.
+
+Prueba limpia del código final: sh scripts/bootstrap.sh --origin 2017-03-19
+--instance repro-limpio, con nuevos servicios/volúmenes y simulación. Terminó con
+3 runs manuales de ingesta, 1 asset_triggered de pronóstico y 2 asset_triggered
+de seguimiento, todos success. Horizonte 19–25 marzo, evaluación 16 abril:
+12.474 pronósticos, 1.782 pedidos, 12.474 pares, cero pendientes. MAE
+61.40209713412655, WAPE 0.12776200891752645 y cobertura 0.820266153599487.
+IDs y comandos completos en docs/bootstrap.md y evidencia ignorada en
+data/bootstrap/repro-limpio/result.json. También se comprobó 2017-03-12 y
+repetición exacta sin nuevas publicaciones/runs ni alteraciones de resultados.
+
+Se aprobaron 183 pruebas enfocadas sin fit, Ruff, formato, pip check y auditoría.
+Se conservan hashes de CSV/pesos/entrega archivada, los 51 runs del MLflow
+original y su alias v4. Los ensayos preliminares se detuvieron conservando sus
+archivos/volúmenes; no se tocaron servicios originales. No se hacen commits,
+push, merge ni tags Git; no se versionan simulaciones/snapshots completos en DVC.
+
+Verificación final adicional del escenario limpio: repetir exactamente el comando
+conservó 3/1/2 DAG Runs, 5 runs MLflow y 1 versión de modelo, sin modificar los
+25 archivos de salida ni el manifiesto de la bandeja. Se comprobaron cuantiles
+ordenados, recibos/calibración disponibles al corte y hashes originales. Informe
+en data/bootstrap/repro-limpio/verification.json; servicios saludables 8083/5013.
+
+
+### D071 — Publicación del PR final de reconstrucción (2026-11-01)
+
+Se autoriza publicar restauración del Champion, bootstrap y guía consolidada en
+un PR hacia main, sin merge ni tag entrega-lab1. Antes de modificar el índice se
+respaldan los 21 archivos pendientes, sus SHA-256, HEAD y patch binario en
+/private/tmp/lab1-pr-repro-20261101-173659. La rama nueva se basa en origin/main
+actualizado (a0b1708429b57eb901abd8f48f8d4867f44435a6), cuyo árbol coincide con
+el HEAD anterior; no se pierden ni reescriben los siete commits previos integrados.
+
+Commits por funcionalidad: restauración/puntero DVC y seguridad; bootstrap,
+infraestructura y Assets con pruebas; README, reglas y decisiones consolidadas.
+Las rutas se agregan explícitamente, con auditoría del índice antes de cada commit
+y del historial antes de publicar. No se incluyen .env, config.local OAuth, CSV,
+pesos, datos de bootstrap, bases, volúmenes, cachés ni informes temporales.
+
+Validaciones locales: pytest completo, 249 pruebas aprobadas y tres advertencias
+no bloqueantes (cores físicos, esquema entero MLflow y deprecación pandas); Ruff
+check/formato, pip check, sintaxis shell y auditoría del árbol de trabajo aprobados.
+Los tres targets models/current.dvc, models/champion_restore.dvc y data/entrega.dvc
+están sincronizados en google_drive (estado cloud {}). Se conservan los cinco
+punteros de originales ya versionados, sin incorporar CSV al índice.
+No se reejecutan bootstrap ni inferencias, ni se entrenan modelos del laboratorio.
+El PR solicita CI con Python 3.12; su resultado debe comprobarse en GitHub Actions
+y comunicarse con enlaces reales, sin dar por aprobada una ejecución pendiente.
