@@ -1,0 +1,20 @@
+schema_version: 1
+schedule: '0 6 * * 0'
+timezone: America/Guatemala
+start_date: '2017-03-05'
+catchup: false
+horizon_days: 7
+model_name: corporacion_favorita_random_forest
+model_alias: champion
+# Se requieren snapshots completos: as_of <= issued_at y 28 días de historia.
+snapshot_wait_seconds: 900
+# El cron semanal es tiempo de ejecución; el escenario de datos se fija por separado.
+# Replay fijo explícito: no avanzar ni elegir silenciosamente el último snapshot.
+simulation_calendar:
+  mode: historical_replay
+  replay_id: favorita_2017_03_05
+  data_start: '2013-01-01'
+  data_end: '2017-08-15'
+  origin: '2017-03-05'
+  issued_at: '2017-03-05T12:00:00Z'
+  snapshot_id: 645e5d301d92ba40e3374077c4b76921e8daf49f8a1ae415ee2e24f1d58ad5c0

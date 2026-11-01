@@ -1,0 +1,9 @@
+# Overlay: solo sustituye la imagen de los tres procesos Airflow de lab1.
+# PostgreSQL, MLflow, volúmenes e imagen del inicializador permanecen iguales.
+services:
+  airflow-api:
+    image: lab1-airflow-pronostico:3.3.2
+  airflow-scheduler:
+    image: lab1-airflow-pronostico:3.3.2
+  airflow-dag-processor:
+    image: lab1-airflow-pronostico:3.3.2

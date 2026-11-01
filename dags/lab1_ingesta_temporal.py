@@ -1,17 +1,19 @@
-"""Sondeo cada cinco minutos y backfill manual por corte explícito."""
+"""Sondeo cada tres horas y backfill manual por corte explícito."""
 
 from datetime import timedelta
+from pathlib import Path
 
 import pendulum
 from airflow.sdk import dag, get_current_context, task
 
 from reposicion import automatic, ingestion
+from reposicion.airflow_dependencies import SALES_OUT, SNAPSHOT_OUT, emit_snapshot
 
 
 @dag(
     dag_id="lab1_ingesta_temporal",
-    schedule="*/5 * * * *",
-    start_date=pendulum.datetime(2017, 1, 1, tz="America/Guayaquil"),
+    schedule="0 */3 * * *",
+    start_date=pendulum.datetime(2017, 1, 1, tz="America/Guatemala"),
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
@@ -25,15 +27,27 @@ def ingesta_temporal():
         conf = get_current_context()["dag_run"].conf or {}
         return "descubrir" if conf.get("as_of") else "procesar_pendientes"
 
-    @task
+    @task(outlets=[SNAPSHOT_OUT, SALES_OUT])
     def procesar_pendientes():
         context = get_current_context()
         cutoff = context["data_interval_end"]
         if cutoff is None:
             raise ValueError("El ciclo automático requiere data_interval_end")
-        return automatic.poll_cycle(
+        result = automatic.poll_cycle(
             **automatic.settings(), as_of=cutoff.isoformat(), cycle_id=context["run_id"]
         )
+        if result.get("publication_id"):
+            work = automatic.settings()["work_root"]
+            paths = list(Path(work).glob("automatic/*/publications/" + result["publication_id"]))
+            if len(paths) != 1:
+                raise ValueError("Publicación incremental ambigua")
+            emit_snapshot(
+                context,
+                paths[0],
+                work,
+                {r["delivery_id"] for r in result["processed_files"] if r["applied"]},
+            )
+        return result
 
     @task
     def descubrir():
@@ -58,9 +72,12 @@ def ingesta_temporal():
     def validar(plan_id):
         return ingestion.validate(ingestion.settings()["work_root"], plan_id)
 
-    @task
+    @task(outlets=[SNAPSHOT_OUT, SALES_OUT])
     def publicar_snapshot(plan_id):
-        return ingestion.snapshot(ingestion.settings()["work_root"], plan_id)
+        work = ingestion.settings()["work_root"]
+        result = ingestion.snapshot(work, plan_id)
+        emit_snapshot(get_current_context(), Path(work) / "snapshots" / plan_id, work)
+        return result
 
     route = elegir_modo()
     plan = descubrir()
