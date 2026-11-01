@@ -12,10 +12,11 @@ MAX_BYTES = 1024 * 1024
 DVC_ORIGINALS = {"train", "stores", "holidays_events", "oil", "transactions"}
 DVC_MODEL_POINTER = "models/current.dvc"
 DVC_DELIVERY_POINTER = "data/entrega.dvc"
-DVC_POINTERS = {f"data/original/{name}.csv.dvc" for name in DVC_ORIGINALS} | {
-    DVC_MODEL_POINTER,
-    DVC_DELIVERY_POINTER,
-}
+DVC_RESTORE_POINTER = "models/champion_restore.dvc"
+DVC_DIRECTORY_COUNTS = {DVC_MODEL_POINTER: 16, DVC_DELIVERY_POINTER: 17, DVC_RESTORE_POINTER: 7}
+DVC_POINTERS = {f"data/original/{name}.csv.dvc" for name in DVC_ORIGINALS} | set(
+    DVC_DIRECTORY_COUNTS
+)
 FORBIDDEN_DIRS = {
     "data",
     "models",
@@ -116,8 +117,7 @@ def validate_blob(path, content, *, mode="100644", secrets=(), path_only=False):
             if not isinstance(document["outs"], list) or len(document["outs"]) != 1:
                 raise ValueError("outputs")
             out = document["outs"][0]
-            is_model_directory = path == DVC_MODEL_POINTER
-            is_directory = is_model_directory or path == DVC_DELIVERY_POINTER
+            is_directory = path in DVC_DIRECTORY_COUNTS
             allowed_fields = {"md5", "size", "path", "hash"}
             if is_directory:
                 allowed_fields.add("nfiles")
@@ -135,7 +135,7 @@ def validate_blob(path, content, *, mode="100644", secrets=(), path_only=False):
                     not is_directory
                     or (
                         type(out.get("nfiles")) is int
-                        and out["nfiles"] == (16 if is_model_directory else 17)
+                        and out["nfiles"] == DVC_DIRECTORY_COUNTS[path]
                     )
                 )
             ):

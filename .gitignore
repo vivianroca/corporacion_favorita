@@ -33,6 +33,7 @@ dist/
 /models/?*
 !/models/
 !/models/current.dvc
+!/models/champion_restore.dvc
 /forecasts/
 /orders/
 /reports/
