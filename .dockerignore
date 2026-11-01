@@ -9,5 +9,6 @@
 !docker/
 !docker/Dockerfile.airflow
 !docker/Dockerfile.forecast
+!docker/Dockerfile.bootstrap
 !docker/requirements.forecast.lock
 !docker/init_airflow.py
