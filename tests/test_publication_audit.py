@@ -172,3 +172,39 @@ def test_model_pointer_cannot_expand_its_authorized_scope(field, value):
 def test_model_artifacts_and_other_pointers_remain_blocked(path):
     with pytest.raises(AUDIT.AuditError):
         AUDIT.validate_blob(path, b"not metadata")
+
+
+def test_delivery_directory_pointer_is_allowed():
+    root = Path(__file__).resolve().parents[1]
+    AUDIT.validate_blob("data/entrega.dvc", (root / "data/entrega.dvc").read_bytes())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("path", "../reports"),
+        ("path", "entrega/other"),
+        ("md5", "a" * 32),
+        ("nfiles", 16),
+        ("nfiles", True),
+        ("size", -1),
+        ("hash", "sha256"),
+        ("credential", "private-value"),
+    ],
+)
+def test_delivery_pointer_cannot_expand_its_authorized_scope(field, value):
+    import yaml
+
+    out = {"md5": "a" * 32 + ".dir", "size": 123, "nfiles": 17, "path": "entrega"}
+    out[field] = value
+    with pytest.raises(AUDIT.AuditError):
+        AUDIT.validate_blob("data/entrega.dvc", yaml.safe_dump({"outs": [out]}).encode())
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["data/entrega/manifest.json", "data/other.dvc", "data/entrega/credentials.json"],
+)
+def test_delivery_exception_does_not_allow_contents_or_other_pointers(path):
+    with pytest.raises(AUDIT.AuditError):
+        AUDIT.validate_blob(path, b"not metadata")

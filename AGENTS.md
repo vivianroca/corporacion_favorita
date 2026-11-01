@@ -25,3 +25,21 @@
 - Se autoriza registrar los doce pipelines temporales v2 ya entrenados en Logged Models y Model Registry, asociados a sus runs y métricas originales. No ejecutar fit ni crear entrenamientos; conservar versión HGB anterior y métricas/historiales, sin Champion/aliases de promoción.
 - Se autoriza publicar el código pendiente en ramas encadenadas, commits por etapa y tags Git lab1-*, con PR conjunto sin merge; excluir datos, artefactos y secretos, sin crear entrega-lab1.
 - Se autoriza DVC exclusivamente para models/current: doce pipelines actuales y cuatro CBM de los cuatro folds temporales v2, sin entrenar ni alterar fuentes. Git solo admite models/current.dvc como metadato nuevo; no versionar simulación, snapshots, históricos u otros artefactos. Mantener storage dedicado y verificar recuperación sin borrar cachés.
+
+- Se autoriza crear comparacion_modelos en MLflow a partir de los runs existentes temporal v2, con tablas/gráficas y runs comparables nuevos. No entrenar, sobrescribir fuentes, modificar Airflow/DVC ni asignar Champion.
+
+- Se autoriza asignar champion a Random Forest existente, versión del último fold, conservando trazabilidad a runs, Git y DVC. Sin reentrenamiento ni alteración de pesos o métricas.
+
+- Se autoriza lab1_pronostico_reposicion semanal configurable, consumiendo exclusivamente snapshots validados con corte explícito y Champion existente, sin reentrenar ni modificar el DAG de ingesta. Conservar backfill, linaje, versiones DVC y publicaciones inmutables; no hacer operaciones Git en esta tarea.
+
+- Se autoriza lab1_seguimiento diario configurable y sus evaluaciones históricas: métricas de pronósticos publicados contra ventas de ingesta disponibles, incluyendo datos tardíos/correcciones y registro idempotente en MLflow. Conservar predicciones originales y ambos DAGs anteriores; sin reentrenamiento, cambios DVC ni operaciones Git.
+
+- Se autoriza adaptar la orquestación de los tres DAGs con Assets nativos: ingesta cada tres horas, pronóstico exclusivamente semanal con sensor de snapshot confirmado y seguimiento por pronósticos O ventas. Conservar módulos de negocio, modelos, cortes/backfill e idempotencia; autorizar históricos mediante catálogo inicial y nuevas publicaciones solo mediante confirmación exitosa. Sin entrenamiento ni operaciones Git.
+
+- Se autoriza el motor independiente de pedidos sobre cuantiles existentes con costos/plazo/inventario externos y escenarios conjuntos de demanda acumulada; documentar los supuestos no identificables. Sin modificar Airflow, Git, DVC o modelos existentes ni reentrenar; probar sensibilidad cambiando solo costos y conservar versiones de recomendaciones.
+
+- Se autoriza integrar pedidos existentes al DAG de pronóstico con confirmación conjunta atómica, costos/inventario versionados e idempotencia. No modificar los otros DAGs ni los motores/modelos existentes; sin operaciones Git ni reentrenar. Mantener Asset sin emitir ante fallo de pedidos y probar histórico completo.
+
+- Se autoriza corregir únicamente el reloj/sensor del DAG de pronóstico con replay histórico explícito, sin usar silenciosamente fechas físicas actuales. Conservar validación de 28 días, modelos, otros DAGs, idempotencia y backfill; probar el run programado real con la versión actual. No reentrenar ni hacer operaciones Git.
+
+- Se autoriza versionar data/entrega mediante data/entrega.dvc y subir solo sus objetos a google_drive: una publicación histórica válida de pronósticos, pedidos y seguimiento con manifiestos/linaje, sin duplicados, credenciales, regeneración o entrenamiento. Mantener DAGs y originales; sin commit, staging ni push de Git. Solo excepción de metadatos en gitignore.

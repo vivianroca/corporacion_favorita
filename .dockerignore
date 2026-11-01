@@ -8,4 +8,6 @@
 !dags/*.py
 !docker/
 !docker/Dockerfile.airflow
+!docker/Dockerfile.forecast
+!docker/requirements.forecast.lock
 !docker/init_airflow.py

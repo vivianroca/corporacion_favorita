@@ -1,0 +1,7 @@
+schema_version: 1
+schedule: '0 8 * * *'
+timezone: America/Guatemala
+start_date: '2017-03-12'
+catchup: false
+# Assets OR son el disparador primario; cron diario opcional de reconciliación.
+daily_reconciliation: false

@@ -58,6 +58,11 @@ Para reproducir la instalación desde `lab1` con el lock existente:
 .venv/bin/python -m pytest --version
 ```
 
+El lock incluye DVC 3.67.1, dvc-gdrive 3.0.1 y PyDrive2 1.21.2.
+Las credenciales OAuth se configuran localmente en `.dvc/config.local`, fuera de Git.
+Se conserva la combinación instalada de pyOpenSSL 24.2.1, cryptography 43.0.3
+y AsyncSSH 2.21.1 para compatibilidad con Google Drive y DVC.
+
 Para regenerar deliberadamente el lock cuando cambien las dependencias:
 
 ```sh
@@ -528,3 +533,121 @@ snapshots, modelos históricos, predicciones ni otros artefactos.
 [Alcance exacto, estructura y verificación](docs/modelos_dvc.md). El remoto local
 no es accesible desde GitHub ni por docentes en otros equipos; el remoto externo
 sigue pendiente.
+
+## Comparación de modelos existentes
+
+[comparacion_modelos en MLflow](http://localhost:5011/#/experiments/6) contiene
+cuatro runs comparables, sin entrenamiento: baseline semanal y RF/HGB/CatBoost
+con variables temporales v2. Se leen directamente 20 runs fuente (cuatro folds y
+un agregado por modelo); se validan fechas, cobertura y agregación ponderada.
+
+Cada run conserva MAE/WAPE globales y por fold, identificadores de sus fuentes,
+tablas CSV/Markdown, barras globales/por fold y radar PNG/SVG. El radar usa
+`mínimo error del eje / error del modelo`: 1 representa el menor error.
+Sus ejes son global y cuatro folds, con paneles MAE/WAPE; ambos son proporcionales
+con iguales observaciones y ventas y no aportan evidencias independientes.
+
+La ejecución local y sus identificadores están en
+`reports/comparacion_modelos/2026-10-31/runs.json` (ignorado por Git).
+Para crear otra comparación, siempre en runs nuevos y un directorio nuevo:
+
+```bash
+.venv/bin/python -m reposicion.compare_models --output reports/comparacion_modelos/NUEVA_EJECUCION
+.venv/bin/pytest -q tests/test_compare_models.py
+```
+
+La configuración de fuentes está en `configs/comparacion_modelos.yaml`.
+No se modifican pesos, Airflow, DVC ni aliases de Registry.
+
+## Champion actual
+
+Por indicación del usuario, el alias `champion` de
+`corporacion_favorita_random_forest` apunta a la **versión 4** (último fold existente).
+URI: `models:/corporacion_favorita_random_forest@champion`.
+Run original: `f6062df6a53549a79125fd208aab381d`, entrenamiento hasta 2017-01-28.
+La comparación global de cuatro folds permanece en el run
+`c33f236952034629ae3e235ab1d4da0e`: MAE 90.562572, WAPE 19.005031 %;
+esas métricas evalúan la estrategia con cuatro ajustes, no solo esta versión.
+
+Trazabilidad DVC: `models/current.dvc` →
+`models/current/random_forest/fold_4/model.joblib`, directorio
+`6758afd54f231ee0e194603f381b7567.dir`, commit
+`09fd79b700d11c50e25ccba5c31287f4152a489f`.
+Los tags `champion.*` de la versión conservan esas referencias, ambos runs y
+SHA-256 del pipeline. Se verificó el hash contra MLmodel y el índice DVC.
+No hubo reentrenamiento ni modificación de pesos, métricas, Airflow o DVC.
+
+## Pronóstico semanal en Airflow
+
+DAG `lab1_pronostico_reposicion`: domingos a las **06:00 America/Guatemala**,
+configurable en `configs/pronostico.yaml`, `catchup=False` y backfill manual
+por corte/snapshot/versión. Consume snapshots validados y el Champion existente
+sin entrenar; publica siete días de P10/P50/P90 con linaje y deduplicación.
+
+[Configuración, despliegue, comandos y pruebas reales](docs/pronostico_airflow.md).
+Usar el overlay `docker/compose.forecast.yaml` al gestionar Airflow.
+La ejecución programada usa un **replay histórico explícito y fijo** en
+`simulation_calendar`: emisión 2017-03-05T12:00Z y snapshot completo de 28 días.
+El cron físico de 2026 no se usa como fecha de ventas. Repetir el escenario
+reutiliza resultados; el avance del corte requiere configuración y snapshot nuevos.
+[Reloj simulado, backfill y prueba programada](docs/reloj_simulado.md).
+
+## Seguimiento por Assets en Airflow
+
+`lab1_seguimiento` se activa por **pronósticos confirmados O ventas evaluables**.
+La reconciliación diaria (08:00 Guatemala) es opcional y está desactivada en
+`configs/seguimiento.yaml`; `catchup=False`. Compara P50 de publicaciones
+inmutables con ventas conocidas al corte y registra MAE, WAPE y cobertura
+P10–P90 en `corporacion_favorita-seguimiento` de MLflow.
+Reevalúa datos tardíos/correcciones en versiones nuevas y reutiliza resultados
+sin cambios. [Políticas, despliegue y backfill](docs/seguimiento_airflow.md).
+
+
+## Dependencias entre DAGs
+
+DAG 1 publica Assets de snapshots y ventas; DAG 2 espera el snapshot confirmado
+**solo al llegar su cron semanal**; DAG 3 consume eventos de pronósticos o ventas
+independientemente. Un fallo de DAG 2 no publica un Asset y no impide evaluar
+pronósticos históricos. Se conserva backfill e idempotencia.
+
+[Arquitectura, migración del catálogo histórico y pruebas](docs/dependencias_assets.md).
+
+## Motor independiente de pedidos sugeridos
+
+`reposicion.orders` transforma los P10/P50/P90 existentes en pedidos por tienda y
+familia con costos configurables en `configs/costs.yaml`, sin cargar ni entrenar
+modelos. Usa escenarios diarios conjuntos y cuantiles de demanda acumulada;
+no suma los cuantiles diarios. Conserva versiones por configuración e inventario.
+
+```bash
+.venv/bin/python -m reposicion.orders --forecast-dir reports/uncertainty/2017-03-05-v2 --costs configs/costs.yaml --output-root reports/orders
+```
+
+Los costos/inventarios son supuestos ilustrativos explícitos. El plazo de dos días
+forma parte del horizonte de siete; el pedido llega el día 3 y cubre días 3–7.
+Nueve pruebas aprobadas y 1.782 pedidos generados. Cambiar solo merma 1→5 redujo
+las recomendaciones manteniendo los mismos pronósticos y escenarios.
+[Política, distribución, validación y resultados](docs/motor_pedidos.md).
+El DAG `lab1_pronostico_reposicion` ejecuta este motor después del pronóstico y
+solo confirma el Asset cuando también están completos los pedidos.
+[Integración, versiones de costos y prueba histórica](docs/pedidos_en_airflow.md).
+
+## Entrega histórica de resultados
+
+`data/entrega.dvc` referencia **17 archivos, 3.621.130 bytes**: publicación de
+pronósticos/pedidos 5–11 marzo 2017, seguimiento completo al 2 de abril,
+configuración de costos, manifiestos y trazabilidad modelo/run/DVC/Assets.
+Se subieron 18 objetos a `google_drive`; status local/cloud sin diferencias y
+lectura remota completa verificada por hash. No contiene credenciales ni pesos,
+ni copias completas de bases/simulación/snapshots.
+
+El contenido permanece fuera de Git. El puntero es local, todavía sin commit ni
+push Git; para recuperarlo en otra computadora primero debe estar disponible
+ese metadato y la configuración/autenticación de google_drive (con dvc-gdrive).
+
+```bash
+.venv/bin/dvc pull data/entrega.dvc --remote google_drive
+```
+
+Inventario: `data/entrega/manifest.json`; descripción: `data/entrega/README.md`.
+Verificación de descarga remota: `reports/entrega/verificacion_dvc.json`.

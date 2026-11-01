@@ -1,8 +1,27 @@
 schema_version: 1
-status: draft
-# No son costos cero: null significa que falta una decisión de negocio.
-shortage_cost_per_unit: null
-excess_cost_per_unit: null
-lead_time_days: null
-inventory_policy: null
-# Una implementación futura deberá rechazar costos sin definir.
+status: illustrative_assumptions
+monetary_unit: unidad_monetaria
+# Costos marginales ilustrativos por unidad de venta; no estimados de Favorita.
+shortage_cost_per_unit: 5.0
+merma_cost_per_unit: 1.0
+horizon_days: 7
+# Dos días desde emisión: el pedido llega al inicio del día 3 y cubre días 3–7.
+lead_time_days: 2
+inventory:
+  source: assumed_known_at_forecast_issue
+  policy: lost_sales
+  on_hand_default: 0.0
+  inbound_at_arrival_default: 0.0
+  # No hay inventario real en las cinco fuentes. Overrides conocidos al corte.
+  per_series: []
+  # Ejemplo: [{store_nbr: 1, family: DAIRY, on_hand: 10.0, inbound_at_arrival: 0.0}]
+  terminal_merma_fraction: 1.0
+  # 0 = continuo: las unidades de venta no son necesariamente enteras.
+  quantity_step: 0.0
+demand_distribution:
+  method: piecewise_quantile_gaussian_copula
+  # Supuesto no identificable con tres cuantiles: correlación latente diaria común.
+  daily_latent_correlation: 0.35
+  tail_spread_multiplier: 2.0
+  scenario_count: 8192
+  seed: 42

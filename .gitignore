@@ -27,6 +27,8 @@ dist/
 !/data/original/holidays_events.csv.dvc
 !/data/original/oil.csv.dvc
 !/data/original/transactions.csv.dvc
+# Solo metadatos de la entrega; su contenido permanece fuera de Git.
+!/data/entrega.dvc
 # Solo el puntero de los 16 pesos autorizados; el directorio sigue fuera de Git.
 /models/?*
 !/models/
