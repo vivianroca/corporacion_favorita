@@ -988,3 +988,532 @@ Ruff/formato correctos. El informe de recuperación local queda ignorado por Git
 
 No cambian versiones de MLflow, aliases, pesos o hiperparámetros. El remoto local
 no habilita acceso docente externo; permanece pendiente un remoto compartido.
+
+## D056 — Comparación a partir de runs existentes
+
+Se crea `comparacion_modelos` (experimento 6) con cuatro runs nuevos FINISHED,
+comparison_id=49b104b634f8472f8b4ae2675ad4bada. Fuentes explícitas: baseline/RF/HGB
+del grupo temporal v2 38f20499009a405da5231d65382aed8d y CatBoost del grupo
+f34f181e5d82463db7c2aba64ce572d9. No se mezclan candidatos históricos v1.
+Se copian las métricas originales, validando cuatro ventanas idénticas, horizonte
+siete días, emisión/evaluación, cobertura y denominadores ponderados globales.
+
+Cada run registra 14 artefactos: tablas global/por fold/completa, normalización,
+informe Markdown, fuentes JSON, configuración y tres gráficas PNG/SVG.
+Se verificaron por hash los 56 archivos descargados y por igualdad las métricas
+globales y de los 16 folds. Los 38 runs previos y Registry (versiones/aliases)
+conservan exactamente sus metadatos anteriores. No se entrenó, cargó ni registró
+ningún modelo ni se asignó Champion. Siete pruebas numéricas pasan sin fit.
+
+El radar normaliza por el mínimo de cada eje; si es cero, asigna 1 a errores cero
+y 0 a los positivos. MAE/WAPE son proporcionales con la cobertura compartida:
+se documenta su redundancia, sin interpretar sus perfiles como evidencia doble.
+La comparación refleja ventanas de desarrollo, no una evaluación final nueva.
+Los artefactos permanecen fuera de Git y no se modifica DVC ni Airflow.
+Matplotlib emitió avisos de caché Fontconfig no escribible durante la primera
+creación; generó correctamente los seis gráficos y se inspeccionó el radar.
+
+## D057 — Alias champion de Random Forest existente
+
+El usuario autoriza explícitamente promover Random Forest sin reentrenar.
+Se asignó `champion` a corporacion_favorita_random_forest versión 4 READY,
+el fold con corte más reciente, no el fold con menor error individual.
+Run fuente f6062df6a53549a79125fd208aab381d; entrenamiento termina 2017-01-28.
+Se conserva validation_only=true: sigue siendo un modelo del walk-forward,
+no un ajuste nuevo a toda la historia ni evidencia de validación independiente.
+
+Tags de versión vinculan el run agregado 517dc691cef148ae8959e73e9419cded,
+comparación c33f236952034629ae3e235ab1d4da0e, models/current.dvc, ruta fold_4,
+commit 09fd79b700d11c50e25ccba5c31287f4152a489f y directorio DVC
+6758afd54f231ee0e194603f381b7567.dir. SHA-256 del pipeline:
+bb71d5bf8116b80c8b1fb409b7420a514b2dae90e93e87d064f6235e178583ef.
+Coincide con metadata.trained_pipeline_sha256 del MLmodel registrado y el MD5
+coincide con el índice de directorio DVC, cuyo hash también se verificó.
+La consulta por alias resuelve versión 4/run correcto; el run original conserva
+exactamente su contenido previo. Registro local reports/champion/random_forest_v4.json.
+No se crearon versiones ni runs, no se entrenó/deserializó ningún modelo y no
+se modificaron pesos, otros aliases, Airflow o DVC. Sin commits/publicación Git.
+
+## D058 — Incertidumbre empírica del Champion sin reentrenar
+
+Se implementa reposicion.uncertainty: resuelve champion a versión inmutable,
+carga el pyfunc existente y utiliza errores firmados actual-prediction de los
+folds RF del mismo grupo temporal v2, descargados directamente de MLflow.
+Solo acepta períodos anteriores al origen y evaluated_at <= issued_at. Rechaza
+Champion con entrenamiento/evaluación posteriores al corte. La política usa
+fechas históricas simuladas, no timestamps de creación física de MLflow en 2026.
+
+Calibración por familia y horizonte, agrupando tiendas de la misma familia;
+mínimo 30 residuos, sin fallback global entre familias. Cuantiles empíricos
+lineales 0.1/0.5/0.9 sumados a la predicción puntual y truncados a cero. P50
+corrige el sesgo mediano, no se identifica la media del bosque con la mediana.
+Se garantiza orden, pero no cobertura nominal: no es intervalo conformal ni
+validación independiente; hay solo cuatro ventanas y posible deriva temporal.
+
+Ejemplo: emisión 2017-03-05T12:00:00Z, horizonte 5–11 marzo 2017, después de la
+última evaluación disponible el 3 de marzo. Champion versión 4, mismo run/puntero
+DVC documentados en D057. Se guardan 12.474 filas únicas para 1.782 series en
+reports/uncertainty/2017-03-05-v2/forecast_quantiles.csv y lineage.json, con
+versión/run/tags DVC, hashes de evaluations y entregas/calendario seleccionados
+por disponibilidad. Se mantienen originales y resultados anteriores intactos.
+
+Dos pruebas pytest sin fit pasan; verificación completa de salida confirma
+cuantiles finitos, no negativos, ordenados y calibración suficiente. Primera
+ejecución falló por directorio de descarga inexistente; se corrigió y se usó un
+directorio nuevo sin sobrescribir el intento. No se entrenan modelos ni se
+modifican Airflow, DVC o metadatos/runs/aliases de MLflow; sin operaciones Git.
+
+Comando reproducible (destino nuevo):
+.venv/bin/python -m reposicion.uncertainty --origin 2017-03-05 --issued-at
+2017-03-05T12:00:00Z --output reports/uncertainty/OTRA_EJECUCION
+
+## D059 — DAG semanal de inferencia y publicación sobre snapshots
+
+Se autoriza lab1_pronostico_reposicion en Airflow 3.3.2 sin reentrenar ni modificar
+lab1_ingesta_temporal. Cron configurable 0 6 * * 0, America/Guatemala,
+catchup=False, max_active_runs=1. El corte automático es data_interval_end; el
+backfill fija origin/issued_at/snapshot_id y opcionalmente model_version.
+
+La lógica de inferencia reutiliza uncertainty mediante inyección de catálogo de
+snapshot, contrato y versión fijada. SnapshotCatalog consume exclusivamente CSV
+validados con checksums/recibos, as_of <= corte, validación histórica vinculada
+y 28 fechas de historia. No filtra snapshots posteriores para fingir un as-of.
+Mantiene ceros/ausencias y rechaza historia incompleta, contratos incompatibles
+o selección ambigua. No modifica snapshots, bandeja ni originales.
+
+Publicaciones independientes por identidad: corte/origen, snapshot/hash, código,
+contrato, versión/run/source MLflow y calibración/hashes. Lock de archivo, stage
+privado y rename atómico aseguran recuperación e idempotencia; una revisión
+produce otra identidad. Un retry verifica el bundle antes de reutilizarlo.
+Se conserva linaje del Champion/DVC/Git y de todas las entregas seleccionadas.
+No se modifica el alias, pesos ni se crean runs de entrenamiento.
+
+Se extendió la imagen local desplegada lab1-airflow:3.3.2, agregando solo el nuevo
+DAG/proyecto y un venv de inferencia. Se conserva sin reconstruir su DAG de ingesta
+(hash desplegado antes/después acfe21b2596ec5be86c749d76259d8d97d67bf655bc59e35dbfb2836c5b92842).
+El archivo local dags/lab1_ingesta_temporal.py también conserva su contenido previo.
+Se recrearon únicamente API/scheduler/dag-processor con la imagen nueva y los
+volúmenes existentes. PostgreSQL/MLflow no se recrearon. El overlay es
+ docker/compose.forecast.yaml; debe mantenerse en futuros comandos Compose.
+
+Las dependencias del venv se aislaron de Airflow: 52 paquetes con versiones/hashes
+extraídos del lock existente Python 3.12 y cierre Linux sin extras. La resolución
+pip-compile por red no completó; se conservó el lock existente, sin inventar nuevas
+versiones. La instalación Linux --require-hashes y pip check fueron correctos.
+No se instalaron paquetes globales ni se usó otro proyecto.
+
+Prueba real: el DAG de ingesta existente generó el snapshot
+645e5d301d92ba40e3374077c4b76921e8daf49f8a1ae415ee2e24f1d58ad5c0 mediante
+pronostico_snapshot_20170305 (success), corte 2017-03-05T12:00Z y referencias
+2017-02-05 a 2017-03-11. No se regeneraron entregas ni se modificó su DAG.
+El nuevo DAG ejecutó prueba_pronostico_20170305 y
+prueba_pronostico_20170305_reintento: ambos success. El segundo devolvió reused=True.
+Existe una única publicación 9d1027c938284a2604b84a0ff2b2ae17e9ec3035d4c5fb793b46cc6d93873594,
+con 12.474 claves únicas, 1.782 series, 5–11 marzo, cuantiles no negativos ordenados.
+SHA256 forecast=64c2375c90fac0298a964e425148d40b988fbd09c57de5a9908950a116f14d8d,
+conservado después del reintento; todos los archivos coinciden con el manifiesto.
+
+DAG habilitado, sin errores de importación; cron/zona/catchup comprobados en runtime.
+Seis pruebas específicas sin fit, Ruff y formato correctos. El scheduler produjo
+también scheduled__2026-10-25T12:00:00+00:00: failed, sin publicación, al faltar
+historia de 2026. Esa limitación de datos permanece explícita: para operación
+semanal real se requieren snapshots recientes; para simulación usar backfill.
+No se ejecutan operaciones Git ni cambios DVC. Detalles en docs/pronostico_airflow.md.
+
+## D060 — Día de emisión local y backfill manual coherente
+
+El run manual__2026-11-01T00:27:05.358292+00:00 tenía conf vacía. El DAG derivaba
+origin en Guatemala mientras forecast_publication y uncertainty comparaban con
+fecha UTC: una emisión a medianoche UTC corresponde al día anterior local y
+fallaba con Origen incompatible con emisión. Se centraliza validate_origin en
+forecast_time.py usando America/Guatemala y timestamps con zona obligatoria.
+Se mantiene rechazo de fechas realmente incompatibles.
+
+Un manual sin origen/emisión usa el as_of del último snapshot validado con
+historia suficiente en su propio corte; snapshots parciales no se eligen y los
+corruptos fallan. Si se especifica snapshot_id, la selección queda fijada.
+La fecha/intervalo del run solo es límite de descubrimiento, con logical_date o
+ahora como fallback cuando el trigger CLI no tiene intervalo. No se introduce
+esa fecha actual en la inferencia. Con solo origin, se usa 06:00 Guatemala de ese
+día. Un scheduled conserva estrictamente data_interval_end: no se retrocede su
+corte silenciosamente para evitar errores de disponibilidad.
+
+No se relajan los controles: snapshot <= emisión, recibos disponibles, historia
+previa al origen, Champion entrenado/evaluado antes del corte, residuos evaluados
+y períodos terminados antes del origen. Datos 2013–2017 no permiten simular con
+el Champion actual orígenes anteriores a su entrenamiento/evaluación de 2017.
+No hay reentrenamiento, modificación de ingesta, de pesos, de DVC ni operaciones Git.
+
+Se desplegó la imagen corregida conservando la base local y volúmenes. Hash del
+DAG de ingesta desplegado sigue acfe21b2596ec5be86c749d76259d8d97d67bf655bc59e35dbfb2836c5b92842;
+el archivo local tampoco cambia (7a401ee866fbda4e47063a51c2488a7b6e983aa7c417589a43ca65b757dd6bd8).
+
+Pruebas reales: correccion_historica_20170305_utc success, origin=2017-03-05,
+issued_at=2017-03-06T00:30:00Z (fecha local 5 marzo); publicación
+55cd6e960a20f1c29f1de57c2380fdfc12b1dccb4bc055305a554cc7b362028c.
+correccion_manual_sin_conf success, corte efectivo del snapshot 2017-03-05T12:00Z;
+publicación de2ddbae6c7f48e932d7b2260f1eb2e1491ba46529da7ed4f45898d4ccf1f77e.
+Ambos usan snapshot 645e5d301d92ba40e3374077c4b76921e8daf49f8a1ae415ee2e24f1d58ad5c0,
+Champion v4, 12.474 pronósticos para 5–11 marzo. Se verifican hashes del bundle y
+0 <= P10 <= P50 <= P90 en todas las filas. Diez pruebas específicas aprobadas,
+Ruff/formato correctos y sin errores de importación. Runs fallidos previos no se
+borran. Informe local reports/uncertainty/correccion_fechas_resultados.json.
+
+## D061 — Seguimiento diario de predicciones inmutables
+
+Se implementa lab1_seguimiento, cron 0 8 * * *, America/Guatemala,
+catchup=False, max_active_runs=1; configuración externa seguimiento.yaml.
+Solo orquesta reposicion.monitoring en el venv de inferencia existente.
+MAE/WAPE sobre P50 y cobertura inclusiva P10–P90 sobre pares observados; se
+registran completitud y pendientes separadamente. No se evalúan días abiertos,
+no se imputan ausencias con cero y WAPE indefinido se omite. Sin pares observados
+se persiste estado pendiente, sin fabricar métricas ni runs MLflow.
+
+Se leen exclusivamente snapshots de ingesta con as_of <= evaluación y recibos
+conocidos. Por defecto se combinan las últimas revisiones por fecha entre
+snapshots completos/incrementales: un snapshot reciente parcial no hace olvidar
+verdad anterior. Una corrección reemplaza toda su partición; una fila eliminada
+no se rellena desde una revisión vieja. Misma revisión con distinto payload
+falla. snapshot_id fija replay de un único snapshot. Se validan hashes, contrato,
+claves y vínculo a validación. No se leen originales ni se modifica la bandeja.
+
+La identidad usa publicación/hash originales, recibos y verdad efectiva, contrato
+y código. Un nuevo corte sin cambios reutiliza resultado/run; datos tardíos y
+correcciones producen una evaluación nueva. Locks y rename atómico existentes
+protegen publicación local. MLflow busca por evaluation_id, recupera el run y
+completa solo metadatos, métricas o artefactos faltantes, validando los existentes.
+Se conservan los originales y evaluaciones anteriores. Registro en experimento
+corporacion_favorita-seguimiento (8) con cuatro artefactos por evaluación y
+referencias al modelo/run/version/DVC y snapshots/recibos de verdad.
+
+Se ejecutó la ingesta existente, sin modificarla, con seguimiento_reales_20170402,
+corte 2017-04-02T12:00Z, referencias 5–11 marzo, creando snapshot
+1a87a6e7b4ec739577325d6a0b7eb2cf6b58ce23f47e8d5b5daec4636856257e.
+La imagen agrega únicamente el tercer DAG/módulo/configuración sin nuevas
+dependencias; se recrean solo procesos Airflow, con PostgreSQL/MLflow y volúmenes
+conservados. Hash ingesta acfe21b2596ec5be86c749d76259d8d97d67bf655bc59e35dbfb2836c5b92842,
+pronóstico a6fd38839c8f42786341d261fd85d6d0a8f3db125e916ef4bdd3bfa4f80e403b,
+ambos iguales antes/después. Los archivos locales de esos DAGs tampoco cambian.
+
+Pruebas históricas finales seguimiento_historico_final_20170402 y
+seguimiento_historico_final_reintento: success; el segundo retorna reused=True.
+Evaluación d45e9e65afa0067c0f1326d7a4cdfcd6916950c50ca53150f41dd832f6d700a6,
+run MLflow 683aca87742145d48322ad3f04b353c6 FINISHED. Se evaluaron 12.474 filas
+(100 %, cero pendientes), pronóstico 5–11 marzo del Champion v4:
+MAE P50 77.26379684508039; WAPE 0.16173741413512321;
+cobertura P10–P90 0.8002244668911336. Se comprobaron artefactos remotos y unicidad
+del run por evaluación. Todas las publicaciones originales conservan sus hashes.
+
+Nueve pruebas específicas pasan sin cargar/entrenar modelos. Cubren ceros/ausencias,
+WAPE indefinido, cobertura, retrasos/correcciones, días futuros, duplicados,
+composición/reemplazo de particiones, salida JSON y publicación idempotente.
+Ruff/formato correctos y sin errores de importación. Un mensaje stdout del SDK
+provocó reintentos en las primeras pruebas: se corrigió redirigiendo stdout del
+SDK a stderr, con prueba de regresión. Las ejecuciones finales pasaron al primer
+intento y se conserva el historial previo. No se reentrena, no se cambia Champion,
+DVC ni se realizan operaciones Git. Detalles en docs/seguimiento_airflow.md.
+
+## D062 — Dependencias nativas por Assets y cron semanal independiente
+
+Se autoriza modificar exclusivamente la orquestación de los tres DAGs. Se agregan
+orchestration.py (metadatos/preflight/catálogo inicial) y airflow_dependencies.py
+(Assets/aliases) sin editar módulos de negocio, contratos, métricas ni modelos.
+DAG 1 mantiene su programación desplegada cada tres horas y Guatemala; se alinea
+el archivo local con esa configuración antes de añadir eventos. Alias condicionales
+publican snapshots verificados y ventas cerradas relevantes para pronósticos;
+publication_id=None no emite eventos. Replays manuales pueden volver a notificar
+una publicación válida: entrega al menos una vez, consumo idempotente.
+
+DAG 2 conserva cron semanal puro 0 6 * * 0, sin AssetOrTimeSchedule. Un sensor
+nativo reschedule exige snapshot válido al corte y un evento exitoso de ingesta
+con ID/hash exactos. Fija su entrada en XCom y llama al módulo existente. La última
+tarea verifica el bundle y confirma el Asset de pronóstico. Fallos anteriores no
+emiten ese Asset. Un archivo escrito sin confirmación no autoriza seguimiento.
+
+DAG 3 usa FORECASTS | SALES, no AND: puede evaluar históricos aun cuando el
+pronóstico actual falle. Por defecto se activa solo por Assets; cron diario
+configurable queda como reconciliación opcional, daily_reconciliation=false.
+Usa cortes de negocio de eventos y máximo conocido de eventos de ventas para
+permitir evaluar pronósticos históricos recién confirmados. Un as_of explícito
+siempre tiene prioridad, sin extenderse al watermark de eventos posteriores.
+
+Se migra una sola vez el catálogo de tres publicaciones previas válidas en
+operational/orchestration/legacy_forecasts.json, sin modificar sus bytes. Nuevas
+publicaciones requieren eventos nativos exitosos y hashes coincidentes; no se
+añaden automáticamente por descubrir archivos. El catálogo y los eventos de
+MLflow/Assets persisten en volúmenes de lab1. Sin nueva dependencia Python, cambios
+DVC ni operaciones Git. PostgreSQL/MLflow y volúmenes conservados; se recrean solo
+los tres procesos Airflow con imagen construida desde la base local.
+
+Pruebas reales: assets_snapshot_20170305 (success, evento 1),
+assets_ventas_20170402 (success, eventos 2/3), assets_pronostico_20170305
+(success, evento 4) y assets_ventas_despues_fallo (success, eventos 5/6).
+Native scheduler creó tres DAG Runs de seguimiento success, consumiendo
+respectivamente eventos 3, 4 y 6. El tercero reutiliza cuatro evaluaciones con
+reused=True, sin nuevos eventos métricos ni runs MLflow. Sourceforecast autorizado
+nuevo c677c4335f149a7b2b95c3687d9c7ae5e498ae226f4dd81049f980a1d6f42958,
+12.474 filas, horizonte 5–11 marzo 2017 y Champion v4 existente. MLflow eval run
+52ecf01dc1b3461d9de95390365046d0. Cortes emitidos marzo/abril 2017, separados de
+los timestamps físicos de ejecución de noviembre 2026.
+
+assets_pronostico_fallo_controlado usa versión inexistente 999999: failed esperado,
+cero eventos y cero activaciones adicionales. Se verificó antes de volver a
+notificar ventas; después seguimiento histórico volvió a funcionar sin depender
+de ese fallo. assets_sondeo_sin_novedades: success, cero entregas y cero Assets.
+La primera solicitud de ese sondeo usó una logical_date ocupada y no creó un run;
+se reintentó con fecha única sin borrar ni alterar el run previo.
+
+Se verifica cron semanal en runtime, sensor reschedule y cero DAG Runs de
+pronóstico disparados por Assets. Todos los módulos de negocio ya presentes en
+la publicación previa conservan sus hashes. Los tres pronósticos históricos
+conservan bytes; la inferencia nueva difiere numéricamente a lo sumo 3.64e-12,
+dentro de tolerancia verificada, sin cambiar pesos/código. No se interpreta esa
+comparación flotante como igualdad de bytes; idempotencia usa la publicación
+inmutable existente. Doce pruebas específicas sin entrenamiento pasan y no hay
+errores de importación. Detalles y pruebas en docs/dependencias_assets.md e informe
+local ignorado reports/assets/verificacion.json. El fallo controlado se conserva.
+
+## D063 — Pedidos por costos sobre escenarios conjuntos, sin tocar modelos/Airflow
+
+Se autoriza un motor independiente reposicion.orders que reutiliza cuantiles
+existentes. No se ejecutan modelos ni se calculan nuevamente pronósticos.
+configs/costs.yaml deja de ser borrador: faltante=5, merma=1, unidad monetaria
+abstracta, plazo=2 días y horizonte de siete desde emisión. Son valores ilustrativos,
+no estimaciones de costos/inventario real. Inventario inicial/entradas=0 por defecto,
+con overrides por tienda/familia conocidos al corte; ventas perdidas, sin backorders,
+entradas en la fecha de llegada y 100 % del remanente tratado como merma al cierre.
+Cantidades continuas preservan ventas fraccionarias; múltiplos opcionales se eligen
+comparando costo empírico, sin imponer redondeo hacia arriba.
+
+La llegada al inicio del día L+1 cubre únicamente los 7-L días restantes; no se
+extrapola a L+7 días sin pronósticos. El inventario disponible a la llegada se
+calcula por escenario tras consumir la demanda previa, sin descontarlo dos veces.
+El faltante previo inevitable se reporta y se incluye como costo fijo del escenario.
+Se minimiza costo marginal lineal de faltante/merma usando cuantil de demanda neta
+post-llegada, fractil Cu/(Cu+Cm), bajo restricción de pedido no negativo.
+
+Distribución explícita: inversa marginal lineal por tramos compatible con los tres
+cuantiles, colas acotadas por factor 2 y piso cero; cópula normal equicorrelacionada
+con rho latente=0.35, 8192 escenarios antitéticos y PCG64/SHA-256 por serie/fecha,
+semilla 42. Se suman demandas de escenarios, nunca cuantiles diarios. Dependencia
+y colas no se identifican con tres cuantiles: se declaran como supuestos externos,
+sin estimarlos con información futura ni prometer cobertura real. Costos/inventario
+no alteran escenarios, permitiendo sensibilidad aislada con números aleatorios comunes.
+
+Se reutiliza atomic_publish con linaje y versiones: entrada, costos, código y
+runtime forman identidad; una configuración distinta crea otra publicación sin
+sobrescribir. Salidas: suggested_orders.csv, costs.yaml, lineage.json y manifest.
+Se conserva todo el linaje del pronóstico, modelo/run/DVC. Se rechazan costos
+faltantes/no positivos, cuantiles inválidos y series sin siete fechas únicas.
+Sin nuevas dependencias y sin operaciones Git, DVC o cambios en Airflow/modelos.
+
+Nueve pruebas pytest pasan sin entrenamiento. La prueba end-to-end cambia solamente
+costos en el mismo YAML y conserva demanda, semilla, pronósticos y resultados previos;
+comprueba más pedido cuando aumenta el costo relativo de faltante y reutilización
+al repetir. También se prueban acumulación, correlación, inventario/plazo/entradas,
+ventas perdidas, cantidades fraccionarias/múltiplos y entradas inválidas.
+
+Ejecución real sobre reports/uncertainty/2017-03-05-v2: 12.474 pronósticos existentes
+para 5–11 marzo, 1.782 recomendaciones; llegada 7 marzo. Publicación base
+84d211420fd506085ae5176219645db33640079faabdb875111841b83f95fb30. Cambiar únicamente
+merma de 1 a 5 (faltante sigue 5) produce publicación
+f50801688cb13f2c5799c6da49f424869479c4be36babb8c133d2a226a2c69f7:
+las 1.782 recomendaciones disminuyen; ejemplo tienda 1/AUTOMOTIVE 30.650866→16.207156.
+Los cuantiles acumulados quedan idénticos y el SHA de pronósticos sigue
+64c2375c90fac0298a964e425148d40b988fbd09c57de5a9908950a116f14d8d.
+Repetir la base devuelve reused=True. Informes y resultados locales en reports/orders
+y reports/orders_sensitivity, ignorados por Git. Detalles en docs/motor_pedidos.md.
+
+## D064 — Confirmación conjunta de pronóstico y pedidos en DAG 2
+
+Se autoriza integrar el motor existente solo en lab1_pronostico_reposicion,
+sin modificar ingesta, seguimiento, modelos ni realizar operaciones Git.
+Se añade calcular_pedidos después del pronóstico y antes de confirmar_publicacion;
+usa reposicion.orders y configs/costs.yaml sin cambiar el algoritmo existente.
+El cron semanal, sensor, corte y backfill permanecen. costs_path opcional fija
+configuración archivada bajo configs del proyecto o operational/costs, sin permitir
+rutas a otros proyectos. Por defecto usa el YAML incluido en la imagen.
+
+Nuevo helper reposicion.replenishment_publication comprueba integridad de ambos
+bundles, su enlace exacto por hashes, costos/supuestos y una fila válida de pedido
+por tienda/familia. Un paquete completo atómico conserva ambos CSV, costos,
+lineage y manifest. Su identidad versiona pronóstico/pedidos, costos e inventario.
+El Asset existente se emite solo tras este commit, con status=complete y los IDs,
+hashes y versión de costos. Se mantiene el ID/hash del pronóstico en el evento
+para compatibilidad con el seguimiento sin modificar ese DAG.
+
+costs_version es SHA-256 de la copia real del YAML y costs_schema_version=1 define
+su formato. El linaje contiene los supuestos completos de inventario, plazo,
+model/run/DVC y ambos linajes originales. No se relee una configuración vigente
+distinta al confirmar: se usa la copia inmutable utilizada por el motor.
+Intermedios pueden quedar tras un fallo, pero no se emite Asset ni se marca un
+paquete completo si faltan pedidos. Así el seguimiento no autoriza esa publicación
+nueva incompleta; los históricos previamente válidos no se invalidan.
+
+Prueba negativa pedidos_fallo_controlado (costos inexistentes): forecast success,
+pedidos failed tras su retry, confirmación upstream_failed; cero Assets/paquetes.
+Prueba positiva pedidos_historico_20170305: cuatro tareas success. Horizonte
+5–11 marzo 2017, snapshot 645e5d301d92ba40e3374077c4b76921e8daf49f8a1ae415ee2e24f1d58ad5c0,
+Champion v4/run f6062df6a53549a79125fd208aab381d existente. Se publican 12.474
+pronósticos y 1.782 pedidos. pedidos_historico_20170305_reintento: success, con
+reused=True en pronóstico, pedidos y paquete completo; una única salida de cada
+pedido/paquete, sin sobreescribir ni recalcular resultados existentes.
+
+Forecast d9f2d73162c63547301928f740166a5ce5cebd2d1e70c4f397d444d1bec58676;
+orders 987482f0318cac1b349aaa2cd1cab009cc3635a0b3dd1adc90d25b800c3f00a5;
+complete 1d278a9eafe88cb59fc2e01e77f2723cce7defc403dd56f2b72ef940554f3fd1.
+Costos 01fc45e5271ef243c47a73cca65e69fbf9b55baa23439a87f07917d6d24760bb;
+inventario f0be0567bc2f9ef1d3285445c0d97aaac4ea8acd259bf974f985ea61065720b8.
+Inventario inicial/entradas cero, ventas perdidas, merma total al cierre, plazo
+dos, costos ilustrativos faltante5/merma1: se conservan los supuestos de D063.
+
+Catorce pruebas sin modelos aprobaron: consistencia/versiones, idempotencia,
+fallos y sensibilidad de costos. Ruff/formato e importación correctos; checksum
+de los otros DAGs y motores existentes idéntico antes/después. Solo se recrearon
+procesos Airflow para aplicar imagen con nuevo helper/DAG; PostgreSQL/MLflow y
+volúmenes conservados. Copia íntegra de revisión en reports/replenishment/<complete>/,
+informe e2e.json; ambos ignorados por Git. No se reentrena ni cambia DVC/Registry.
+Documentación en docs/pedidos_en_airflow.md.
+
+## D065 — Reloj histórico explícito para el pronóstico programado
+
+El run scheduled__2026-11-01T12:00:00+00:00 falló porque el sensor recibió
+el intervalo físico 2026 como corte de datos. Los snapshots disponibles son
+históricos: solo 645e5d301d92ba40e3374077c4b76921e8daf49f8a1ae415ee2e24f1d58ad5c0
+contiene los 28 días previos necesarios para 2017-03-05. El snapshot más reciente
+parcial para seguimiento no sirve de historia de inferencia. No se altera ese
+control ni se imputa historia inexistente.
+
+Se agrega forecast_clock.py, sin modelos, y simulation_calendar en pronostico.yaml:
+modo historical_replay, replay favorita_2017_03_05, datos 2013-01-01 a 2017-08-15
+según diagnóstico train, origen 2017-03-05, emisión 12Z y snapshot explícito.
+El cron semanal y catchup=False no cambian. El escenario es fijo y reproducible;
+no se avanza artificialmente por semana física ni se elige el último snapshot.
+Para avanzar se necesita cambiar expresamente la política y un snapshot compatible.
+No existe fallback a ahora() ni al intervalo de 2026 como fecha de ventas.
+
+Se preservan backfills explícitos; origin sin emisión deriva 06 Guatemala.
+El backfill nativo utiliza su intervalo histórico, con validación de dominio.
+Manual sin corte usa replay configurado; snapshot explícito sin corte resuelve su
+fecha bajo límite histórico, y vuelve a validarla tras selección. Se valida día
+local, 28 días previos y siete de horizonte dentro del calendario. El modelo y
+residuos siguen con disponibilidad temporal existente, sin ajustes ni reentrenamiento.
+
+El reloj se registra en logs/XCom y metadata del Asset final con política completa,
+SHA de política, fechas físicas y fechas/snapshot resueltos. No se incluyen las
+fechas físicas en la identidad de resultados: un nuevo cron con el mismo escenario
+reutiliza las publicaciones. No se alteran los publicadores, el motor de pedidos,
+validación de snapshots o módulos/modelos existentes ni los otros dos DAGs.
+
+Prueba real: se reabrieron exactamente las cuatro tareas del run scheduled de hoy
+usando la función nativa clear_task_instances(run_on_latest_version=True). Se
+conservaron run_type=scheduled, fecha lógica e intervalo físico 2026-11-01T12Z;
+no se creó un run manual disfrazado ni se ajustó la fecha de la base de datos.
+La selección de la versión actual evita reutilizar la definición serializada vieja.
+Los intentos fallidos previos permanecen en logs. El run terminó success y volvió
+a terminar success tras otro clear para comprobar idempotencia.
+
+Corte efectivo 2017-03-05T12Z, origen 2017-03-05, historia exacta 2017-02-05 a
+2017-03-04 (28 días), todos los recibos disponibles al corte. Resultado: 12.474
+pronósticos y 1.782 pedidos, 5–11 marzo. Segundo intento reutiliza las tres salidas:
+forecast bdf4290355b5f55a5f082dba182228c00833e9d1ceda42160d03e2805f86615d,
+orders 18537175d56fbeea52a6d118398d24675d8bf0d3971b1bf3d191f6ba9e8a86d6,
+complete d4215a0192e655e2f7fecaa29e575bddf77ab6d24f6e99b33e9932c524789613.
+Política SHA c168b3e407c5124dd01aea1ae05049792552d4f55c83921007eac84080587ba3.
+
+Diecisiete pruebas específicas pasan sin modelos; controles existentes de historia
+incompleta siguen activos. Ruff/formato/importación correctos. Hash de los otros
+DAGs y módulos de negocio/validación idéntico antes/después. Nueva imagen solo
+agrega helper de reloj y configuración/DAG2; se recrean procesos Airflow para
+aplicarla, conservando PostgreSQL/MLflow y volúmenes. No se cambia DVC ni se hacen
+operaciones Git. Informe reports/simulated_clock/verification.json; detalles en
+docs/reloj_simulado.md.
+
+## D066 — Entrega histórica curada en DVC y google_drive
+
+El usuario autoriza data/entrega con una sola publicación histórica de pronósticos,
+pedidos y seguimiento, sin regenerar predicciones ni entrenar, sin DAGs ni commits
+ni push Git. Esta autorización amplía explícitamente el alcance DVC previo; no se
+agregan simulación, pesos históricos, CSV originales o snapshots completos.
+
+Se selecciona la publicación completa d4215a0192e655e2f7fecaa29e575bddf77ab6d24f6e99b33e9932c524789613,
+forecast bdf4290355b5f55a5f082dba182228c00833e9d1ceda42160d03e2805f86615d,
+orders 18537175d56fbeea52a6d118398d24675d8bf0d3971b1bf3d191f6ba9e8a86d6,
+horizonte 5–11 marzo 2017, emisión 2017-03-05T12Z. Seguimiento exacto
+72fb79dec85a4a924c132c08747de3dad8b528452a26671b67ebf83e1d3163ef,
+evaluado al 2017-04-02T12Z con corrección r0002 del 5 de marzo; run MLflow
+9de3d4d5fc064c70a618afbf260dead8 FINISHED. Son 12.474 pronósticos/pares observados
+y 1.782 pedidos, cero pendientes. Se comprueban claves, cuantiles originales,
+checksums y concordancia de métricas existentes: MAE77.26379684508039,
+WAPE0.16173741413512321 y cobertura0.8002244668911336.
+
+Se copian sin alterar los bundles completos y de seguimiento, sus manifiestos
+fuente, solo manifiestos de snapshots, metadatos MLflow y evento Asset. Los linajes
+fuente ya embebidos no se duplican como archivos. No se copian credenciales,
+.env, tokens, bases, volúmenes o modelos. El paquete tiene inventario SHA-256 y
+README; lista cerrada de tipos y revisión de campos sensibles, sin archivos con
+contenido duplicado por hash. Los cuantiles que conserva evaluation.csv son la
+evidencia original de emparejamiento, no otra publicación regenerada.
+
+DVC 3.67.1: dvc add --no-relink data/entrega. Se añade exclusivamente la excepción
+!/data/entrega.dvc al gitignore para permitir su metadato; todos los contenidos
+siguen excluidos de Git. El índice Git conserva su hash, sin staging/commit/push.
+Se mantiene google_drive configurado por el usuario, sin cambiar configuración
+ni autenticación. Driver existente dvc-gdrive3.0.1; sin instalaciones nuevas.
+
+Puntero data/entrega.dvc: md5 13f375fa5bd804bc83ba5b7a3b76546e.dir,
+17 archivos, 3.621.130 bytes. Push específico --remote google_drive: 18 objetos
+subidos (17 archivos y el índice). Status local y cloud del único objetivo={};
+se descargaron temporalmente del remoto el índice y los 17 objetos mediante su
+ODB, verificando MD5 de índice y SHA-256 de cada archivo frente a data/entrega.
+No se borró ni reemplazó la caché de DVC o los artefactos originales.
+Informe fuera del target en reports/entrega/verificacion_dvc.json para no alterar
+el paquete después de versionarlo. README/inventario dentro del target.
+
+Los DAGs se conservan. No se hacen commits ni push de Git. El nuevo puntero y
+excepción gitignore quedan locales, pendientes de publicación autorizada. Antes
+de publicar ese metadato por Git habrá que ampliar su lista permitida en
+scripts/auditar_publicacion.py y bloquear el driver gdrive en dependencias; no
+se modifican estos componentes para esta entrega de artefactos.
+
+
+### D067 — Auditoría de entrega y dependencias Google Drive (2026-11-01)
+
+Se permite exclusivamente data/entrega.dvc como puntero de directorio con un
+output relativo entrega, hash MD5 .dir, tamaño entero no negativo y exactamente
+17 archivos. Se conservan las validaciones de campos, secretos, enlaces y
+restricciones de originales/modelos; el contenido de data/entrega sigue excluido.
+Las pruebas rechazan otros punteros, rutas externas, campos adicionales y
+metadatos inválidos, incluyendo enteros booleanos.
+
+Se incorporan dvc-gdrive 3.0.1 y PyDrive2 1.21.2 a dev junto a DVC 3.67.1.
+Se fija la combinación instalada pyOpenSSL 24.2.1, cryptography 43.0.3 y
+AsyncSSH 2.21.1: la resolución inicial sin estas restricciones conservaba
+cryptography 50.0.2 y elegía un OpenSSL distinto al probado localmente.
+requirements.lock se regenera con pip-tools 7.6.2 bajo Python 3.12.16 y hashes.
+Sus 156 versiones coinciden con el entorno instalado. No se instalan paquetes.
+
+Verificación: 52 pruebas de seguridad pasan; Ruff y formato pasan; auditoría
+del árbol de trabajo pasa; pip check sin incompatibilidades; instalación
+--dry-run --require-hashes sin cambios; imports DVC/Drive/OpenSSL/AsyncSSH
+correctos. No se realizó una instalación limpia: el dry-run verifica el
+entorno existente y no vuelve a descargar paquetes ya satisfechos.
+No se modifican DAGs, modelos, datos ni credenciales, ni se hacen operaciones
+de staging, commit, push o merge. Las credenciales siguen en config.local.
+
+
+### D068 — Preparación de siete commits locales (2026-11-01)
+
+Por autorización del usuario se organiza el trabajo pendiente en siete commits
+funcionales en feature/comparacion-modelos, sin push, merge ni PR. Antes de
+modificar el índice se guarda respaldo de los 48 archivos pendientes, sus hashes,
+HEAD y un patch binario en /private/tmp/lab1-pre-commits-20261101-162314.
+No se incluyen archivos ignorados ni credenciales en ese respaldo de código.
+
+Validación previa: pytest completo, 221 pruebas aprobadas y tres advertencias
+no bloqueantes (detección de cores, esquema entero MLflow y deprecación pandas);
+Ruff check/formato y auditoría del árbol de trabajo aprobados. Los tests ejercitan
+modelos sintéticos locales; no se ejecutan entrenamientos del laboratorio ni
+se alteran sus modelos o runs existentes. Cada commit se prepara con rutas
+explícitas y auditoría del índice. Datos y artefactos permanecen fuera de Git;
+solo se incorpora el puntero DVC autorizado de la entrega.
