@@ -21,6 +21,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "dvc==3.67.1",
+    "dvc-gdrive==3.0.1",
+    "PyDrive2==1.21.2",
+    # Combinación instalada compatible con PyDrive2 y el transporte SSH de DVC.
+    "pyOpenSSL==24.2.1",
+    "cryptography==43.0.3",
+    "asyncssh==2.21.1",
     "pytest>=8.3,<10",
     "ruff>=0.9,<1",
     "pip-tools==7.6.2",

@@ -1,7 +1,9 @@
 [core]
     analytics = false
-    remote = storage
+    remote = google_drive
 [cache]
     type = copy
 ['remote "storage"']
     url = ~/dvc-storage/corporacion_favorita
+['remote "google_drive"']
+    url = gdrive://1lCioz77HLI2hwfbshNAdWZef6vOYkOMY
