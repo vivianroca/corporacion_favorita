@@ -1,5 +1,6 @@
 """Sondeo cada tres horas y backfill manual por corte explícito."""
 
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -7,13 +8,21 @@ import pendulum
 from airflow.sdk import dag, get_current_context, task
 
 from reposicion import automatic, ingestion
-from reposicion.airflow_dependencies import SALES_OUT, SNAPSHOT_OUT, emit_snapshot
+from reposicion.airflow_dependencies import (
+    FORECAST_REQUEST_OUT,
+    SALES_OUT,
+    SNAPSHOT_OUT,
+    emit_request,
+    emit_snapshot,
+)
 
 
 @dag(
     dag_id="lab1_ingesta_temporal",
     schedule="0 */3 * * *",
-    start_date=pendulum.datetime(2017, 1, 1, tz="America/Guatemala"),
+    start_date=pendulum.parse(os.environ["LAB1_SCHEDULER_START"])
+    if os.environ.get("LAB1_SCHEDULER_START")
+    else pendulum.datetime(2017, 1, 1, tz="America/Guatemala"),
     catchup=False,
     max_active_runs=1,
     is_paused_upon_creation=False,
@@ -34,7 +43,9 @@ def ingesta_temporal():
         if cutoff is None:
             raise ValueError("El ciclo automático requiere data_interval_end")
         result = automatic.poll_cycle(
-            **automatic.settings(), as_of=cutoff.isoformat(), cycle_id=context["run_id"]
+            **automatic.settings(),
+            as_of=os.environ.get("LAB1_INGEST_AS_OF", cutoff.isoformat()),
+            cycle_id=context["run_id"],
         )
         if result.get("publication_id"):
             work = automatic.settings()["work_root"]
@@ -72,11 +83,13 @@ def ingesta_temporal():
     def validar(plan_id):
         return ingestion.validate(ingestion.settings()["work_root"], plan_id)
 
-    @task(outlets=[SNAPSHOT_OUT, SALES_OUT])
+    @task(outlets=[SNAPSHOT_OUT, SALES_OUT, FORECAST_REQUEST_OUT])
     def publicar_snapshot(plan_id):
         work = ingestion.settings()["work_root"]
         result = ingestion.snapshot(work, plan_id)
-        emit_snapshot(get_current_context(), Path(work) / "snapshots" / plan_id, work)
+        context = get_current_context()
+        notice = emit_snapshot(context, Path(work) / "snapshots" / plan_id, work)
+        emit_request(context, notice, (context["dag_run"].conf or {}).get("forecast_request"))
         return result
 
     route = elegir_modo()

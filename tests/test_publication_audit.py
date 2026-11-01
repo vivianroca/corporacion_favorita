@@ -208,3 +208,29 @@ def test_delivery_pointer_cannot_expand_its_authorized_scope(field, value):
 def test_delivery_exception_does_not_allow_contents_or_other_pointers(path):
     with pytest.raises(AUDIT.AuditError):
         AUDIT.validate_blob(path, b"not metadata")
+
+
+def test_champion_restore_pointer_is_allowed_without_exposing_its_contents():
+    import yaml
+
+    out = {"md5": "a" * 32 + ".dir", "size": 123, "nfiles": 7, "path": "champion_restore"}
+    AUDIT.validate_blob("models/champion_restore.dvc", yaml.safe_dump({"outs": [out]}).encode())
+    for field, value in [
+        ("path", "../data"),
+        ("nfiles", True),
+        ("nfiles", 8),
+        ("md5", "a" * 32),
+        ("secret", "private"),
+    ]:
+        with pytest.raises(AUDIT.AuditError):
+            AUDIT.validate_blob(
+                "models/champion_restore.dvc",
+                yaml.safe_dump({"outs": [{**out, field: value}]}).encode(),
+            )
+    for path in [
+        "models/champion_restore/metadata.json",
+        "models/champion_restore/calibration/fold_1.csv",
+        "models/other.dvc",
+    ]:
+        with pytest.raises(AUDIT.AuditError):
+            AUDIT.validate_blob(path, b"not metadata")

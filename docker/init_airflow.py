@@ -13,3 +13,7 @@ if not path.exists():
 elif json.loads(path.read_text()) != credentials:
     raise SystemExit("Las credenciales del volumen no coinciden con .env; no se sobrescriben")
 subprocess.run(["airflow", "db", "migrate"], check=True)
+if os.environ.get("LAB1_BOOTSTRAP_ENABLED") == "true":
+    from reposicion.orchestration import bootstrap
+
+    bootstrap(os.environ["LAB1_WORK_ROOT"])

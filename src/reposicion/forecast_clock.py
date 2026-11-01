@@ -35,18 +35,24 @@ def resolve_request(config, run_type, conf, *, logical_date=None, data_interval_
         )
     validate_window(clock["origin"], clock["issued_at"], config)
     snapshot = clock.get("snapshot_id")
-    if (
+    if snapshot is not None and (
         not isinstance(snapshot, str)
         or len(snapshot) != 64
         or any(c not in "0123456789abcdef" for c in snapshot)
     ):
         raise ValueError("El replay programado debe fijar un snapshot_id válido")
+    if snapshot is None and clock.get("snapshot_policy") != "discover_at_cut":
+        raise ValueError("Fijar snapshot_id o declarar snapshot_policy=discover_at_cut")
     if not isinstance(clock.get("replay_id"), str) or not clock["replay_id"].strip():
         raise ValueError("Identificar el escenario de replay")
     kind = getattr(run_type, "value", run_type)
-    if kind not in {"scheduled", "manual", "backfill"}:
-        raise ValueError("Este DAG acepta cron, manual o backfill; no se activa por Assets")
+    if kind not in {"scheduled", "manual", "backfill", "asset_triggered"}:
+        raise ValueError("Este DAG acepta cron, manual, backfill o solicitudes por Asset")
     conf = conf or {}
+    if kind == "asset_triggered" and not all(
+        conf.get(k) for k in ("origin", "issued_at", "snapshot_id", "request_id")
+    ):
+        raise ValueError("Asset requiere solicitud explícita con corte y snapshot confirmado")
     historical_snapshot = False
     if conf.get("origin") or conf.get("issued_at"):
         issued = conf.get("issued_at")
@@ -58,7 +64,7 @@ def resolve_request(config, run_type, conf, *, logical_date=None, data_interval_
             "origin", str(parse_instant(issued).astimezone(ZoneInfo(config["timezone"])).date())
         )
         snapshot = conf.get("snapshot_id")
-        resolution = "explicit_backfill"
+        resolution = "asset_request" if kind == "asset_triggered" else "explicit_backfill"
         validate_window(origin, issued, config)
     elif kind == "backfill":
         if data_interval_end is None:
@@ -99,3 +105,13 @@ def resolve_request(config, run_type, conf, *, logical_date=None, data_interval_
         "use_snapshot_cutoff": historical_snapshot,
         "business_clock": audit,
     }
+
+
+def asset_request(notices):
+    """No colapsar silenciosamente cortes distintos en un solo pronóstico."""
+    requests = {n["request_id"]: n for n in notices if n.get("request_id")}
+    if len(requests) != 1:
+        raise ValueError(
+            "Se requiere una única solicitud explícita por ejecución; serializar cortes"
+        )
+    return next(iter(requests.values()))

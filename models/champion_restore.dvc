@@ -1,0 +1,6 @@
+outs:
+- md5: b4b67d267efc7d97bd7dff86c7e363c3.dir
+  size: 4024988
+  nfiles: 7
+  hash: md5
+  path: champion_restore

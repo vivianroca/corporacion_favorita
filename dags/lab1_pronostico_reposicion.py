@@ -10,9 +10,11 @@ import pendulum
 import yaml
 from airflow.sdk import dag, get_current_context, task
 from airflow.sdk.bases.sensor import PokeReturnValue
+from airflow.timetables.assets import AssetOrTimeSchedule
+from airflow.timetables.trigger import CronTriggerTimetable
 
-from reposicion.airflow_dependencies import FORECASTS, SNAPSHOTS, emit_forecast
-from reposicion.forecast_clock import resolve_request, validate_window
+from reposicion.airflow_dependencies import FORECAST_REQUESTS, FORECASTS, SNAPSHOTS, emit_forecast
+from reposicion.forecast_clock import asset_request, resolve_request, validate_window
 
 CONFIG = yaml.safe_load(
     Path(
@@ -44,19 +46,39 @@ def execute(module, args):
 
 
 def request(context):
-    return resolve_request(
+    kind = context["dag_run"].run_type
+    conf = context["dag_run"].conf or {}
+    if getattr(kind, "value", kind) == "asset_triggered":
+        conf = asset_request(
+            [
+                e.extra
+                for events in context.get("triggering_asset_events", {}).values()
+                for e in events
+            ]
+        )
+    result = resolve_request(
         CONFIG,
-        context["dag_run"].run_type,
-        context["dag_run"].conf or {},
+        kind,
+        conf,
         logical_date=context.get("logical_date"),
         data_interval_end=context.get("data_interval_end"),
     )
+    result["model_version"] = conf.get("model_version")
+    return result
 
 
 @dag(
     dag_id="lab1_pronostico_reposicion",
-    schedule=os.environ.get("LAB1_FORECAST_SCHEDULE", CONFIG["schedule"]),
-    start_date=pendulum.parse(CONFIG["start_date"], tz=CONFIG["timezone"]),
+    schedule=AssetOrTimeSchedule(
+        timetable=CronTriggerTimetable(
+            os.environ.get("LAB1_FORECAST_SCHEDULE", CONFIG["schedule"]),
+            timezone=CONFIG["timezone"],
+        ),
+        assets=FORECAST_REQUESTS,
+    ),
+    start_date=pendulum.parse(
+        os.environ.get("LAB1_SCHEDULER_START", CONFIG["start_date"]), tz=CONFIG["timezone"]
+    ),
     catchup=CONFIG["catchup"],
     max_active_runs=1,
     is_paused_upon_creation=False,
@@ -101,6 +123,7 @@ def pronostico_reposicion():
             "resolved_issued_at": plan["issued_at"],
             "resolved_snapshot_id": plan["snapshot_id"],
         }
+        plan["model_version"] = clock.get("model_version")
         confirmed = any(
             e.extra.get("snapshot_id") == plan["snapshot_id"]
             and e.extra.get("manifest_sha256") == plan["manifest_sha256"]
@@ -130,8 +153,9 @@ def pronostico_reposicion():
             "--contracts-path",
             "/opt/lab1/forecast_project/configs/contracts.yaml",
         ]
-        if conf.get("model_version") is not None:
-            args.extend(["--model-version", str(conf["model_version"])])
+        model_version = plan.get("model_version") or conf.get("model_version")
+        if model_version is not None:
+            args.extend(["--model-version", str(model_version)])
         return execute("reposicion.forecast_publication", args)
 
     @task
